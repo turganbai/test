@@ -1,0 +1,9 @@
+{
+  "name": "gitkraken",
+  "description": "This plugin gives Claude access to your real Git and project context: commits, branches, pull requests, and issues across every repo you work in. Ask the agent a question about your work, and it answers from what's actually in your history and your trackers, not what it can guess from the open file.\n\nWorks with GitHub, GitLab, Azure DevOps, Bitbucket, and Jira.",
+  "version": "1.0.0",
+  "author": {
+    "name": "GitKraken"
+  },
+  "mcpServers": "./mcp.json"
+}
