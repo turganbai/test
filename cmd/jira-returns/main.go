@@ -13,6 +13,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"os/signal"
@@ -36,14 +37,22 @@ type flags struct {
 }
 
 func main() {
-	if err := run(os.Args[1:]); err != nil {
+	err := run(os.Args[1:], os.Stderr)
+	switch {
+	case err == nil:
+		return
+	case errors.Is(err, flag.ErrHelp):
+		// -h is a request, not a failure.
+		return
+	default:
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		os.Exit(1)
 	}
 }
 
-func run(args []string) error {
+func run(args []string, stderr io.Writer) error {
 	fs := flag.NewFlagSet("jira-returns", flag.ContinueOnError)
+	fs.SetOutput(stderr)
 	var f flags
 	fs.StringVar(&f.jql, "jql", "", "JQL selecting the sub-tickets to analyse")
 	fs.StringVar(&f.stories, "stories", "", "comma-separated story keys; their sub-tickets are analysed")
@@ -51,10 +60,14 @@ func run(args []string) error {
 	fs.StringVar(&f.to, "to", "", "end of the period, exclusive (2006-01-02 or RFC3339)")
 	fs.StringVar(&f.out, "out", "report.json", `JSON output path, or "-" for stdout`)
 	fs.DurationVar(&f.deadline, "deadline", 10*time.Minute, "overall deadline for the whole run")
+	fs.Usage = func() { usage(fs) }
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
 	if (f.jql == "") == (f.stories == "") {
+		// The most likely way to land here is a bare invocation, so show what
+		// to type rather than only what is wrong.
+		fs.Usage()
 		return errors.New("exactly one of -jql or -stories is required")
 	}
 
@@ -129,6 +142,29 @@ func run(args []string) error {
 	}
 
 	return emit(report, f.out)
+}
+
+func usage(fs *flag.FlagSet) {
+	w := fs.Output()
+	fmt.Fprint(w, `jira-returns counts how often issues were sent back to "returned",
+and which developer each return is attributed to.
+
+Usage:
+  jira-returns -stories KEY[,KEY...] [-from DATE] [-to DATE] [-out FILE]
+  jira-returns -jql QUERY            [-from DATE] [-to DATE] [-out FILE]
+
+Examples:
+  jira-returns -stories PROJ-101,PROJ-102 -from 2026-08-01 -to 2026-08-31
+  jira-returns -jql 'project = PROJ AND parent is not EMPTY AND updated >= -30d' -out -
+
+Flags:
+`)
+	fs.PrintDefaults()
+	fmt.Fprint(w, `
+Configuration comes from the environment; see README.md.
+Required: JIRA_BASE_URL, JIRA_EMAIL, JIRA_API_TOKEN, JIRA_DEVELOPER_FIELD_ID,
+and one of JIRA_RETURNED_STATUS_IDS / JIRA_RETURNED_STATUS_NAMES.
+`)
 }
 
 // resolveStatusIDs prefers explicit ids and falls back to resolving configured

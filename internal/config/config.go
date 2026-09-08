@@ -132,7 +132,8 @@ func Load(getenv Getenv) (*Config, error) {
 	}
 
 	if len(errs) > 0 {
-		return nil, fmt.Errorf("invalid configuration:\n  %w", errors.Join(errs...))
+		lines := strings.Split(errors.Join(errs...).Error(), "\n")
+		return nil, fmt.Errorf("invalid configuration:\n  %s", strings.Join(lines, "\n  "))
 	}
 	return cfg, nil
 }

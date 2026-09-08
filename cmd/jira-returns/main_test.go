@@ -1,6 +1,10 @@
 package main
 
 import (
+	"bytes"
+	"errors"
+	"flag"
+	"io"
 	"strings"
 	"testing"
 	"time"
@@ -86,8 +90,23 @@ func TestRun_RequiresExactlyOneQuerySource(t *testing.T) {
 		{},
 		{"-jql", "project = X", "-stories", "X-1"},
 	} {
-		if err := run(args); err == nil {
+		if err := run(args, io.Discard); err == nil {
 			t.Errorf("run(%v) succeeded, want an error", args)
+		}
+	}
+}
+
+// -h is a request for help, not a failure: it must not reach the error path
+// that exits non-zero.
+func TestRun_HelpIsNotAnError(t *testing.T) {
+	var buf bytes.Buffer
+	err := run([]string{"-h"}, &buf)
+	if !errors.Is(err, flag.ErrHelp) {
+		t.Fatalf("run(-h) = %v, want flag.ErrHelp", err)
+	}
+	for _, want := range []string{"-stories", "-jql", "JIRA_BASE_URL"} {
+		if !strings.Contains(buf.String(), want) {
+			t.Errorf("usage does not mention %q:\n%s", want, buf.String())
 		}
 	}
 }
