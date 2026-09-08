@@ -1,0 +1,77 @@
+{
+  "isLast": false,
+  "nextPageToken": "CAEaBlNVQi0yMg==",
+  "issues": [
+    {
+      "id": "10101",
+      "key": "SUB-1",
+      "fields": {
+        "summary": "Wire up the checkout button",
+        "status": {"id": "10007", "name": "Returned"},
+        "assignee": {"accountId": "qa-1", "displayName": "Qa Engineer", "active": true},
+        "parent": {
+          "id": "10001",
+          "key": "STORY-1",
+          "fields": {"summary": "Checkout revamp"}
+        },
+        "customfield_10050": {"accountId": "dev-a", "displayName": "Alice Dev", "active": true}
+      },
+      "changelog": {
+        "startAt": 0,
+        "maxResults": 100,
+        "total": 150,
+        "histories": [
+          {
+            "id": "9001",
+            "author": {"accountId": "qa-1", "displayName": "Qa Engineer", "active": true},
+            "created": "2026-08-02T09:00:00.000+0000",
+            "items": [
+              {"field": "status", "fieldtype": "jira", "fieldId": "status",
+               "from": "10001", "fromString": "Code Review", "to": "10007", "toString": "Returned"}
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "10102",
+      "key": "SUB-2",
+      "fields": {
+        "summary": "Add the confirmation e-mail",
+        "status": {"id": "10002", "name": "Stage"},
+        "assignee": null,
+        "parent": {
+          "id": "10001",
+          "key": "STORY-1",
+          "fields": {"summary": "Checkout revamp"}
+        },
+        "customfield_10050": null
+      },
+      "changelog": {
+        "startAt": 0,
+        "maxResults": 100,
+        "total": 2,
+        "histories": [
+          {
+            "id": "9101",
+            "author": {"accountId": "dev-b", "displayName": "Bob Dev", "active": true},
+            "created": "2026-08-01T08:00:00.000+0000",
+            "items": [
+              {"field": "Статус", "fieldtype": "jira", "fieldId": "status",
+               "from": null, "fromString": null, "to": "3", "toString": "In Progress"}
+            ]
+          },
+          {
+            "id": "9102",
+            "author": {"accountId": "dev-gone", "displayName": "", "active": false},
+            "created": "2026-08-01T12:00:00.000+0000",
+            "items": [
+              {"field": "assignee", "fieldtype": "jira", "fieldId": "assignee",
+               "from": "dev-b", "fromString": "Bob Dev", "to": "dev-gone", "toString": ""}
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

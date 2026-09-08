@@ -1,0 +1,27 @@
+{
+  "self": "https://example.atlassian.net/rest/api/3/issue/SUB-1/changelog?startAt=2",
+  "maxResults": 2,
+  "startAt": 2,
+  "total": 4,
+  "isLast": true,
+  "values": [
+    {
+      "id": "8003",
+      "author": {"accountId": "qa-1", "displayName": "Qa Engineer", "active": true},
+      "created": "2026-08-04T09:00:00.000+0000",
+      "items": [
+        {"field": "status", "fieldtype": "jira", "fieldId": "status",
+         "from": "10001", "fromString": "Code Review", "to": "10007", "toString": "Returned"}
+      ]
+    },
+    {
+      "id": "8004",
+      "author": {"accountId": "dev-a", "displayName": "Alice Dev", "active": true},
+      "created": "2026-08-05T09:00:00.000+0000",
+      "items": [
+        {"field": "status", "fieldtype": "jira", "fieldId": "status",
+         "from": "10007", "fromString": "Returned", "to": "10002", "toString": "Stage"}
+      ]
+    }
+  ]
+}

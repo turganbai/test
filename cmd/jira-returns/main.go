@@ -1,0 +1,198 @@
+// Command jira-returns reports how often issues were sent back to "returned",
+// and which developer each return is counted against.
+//
+// Configuration comes from the environment (see internal/config); the query
+// and the reporting period come from flags:
+//
+//	jira-returns -stories PROJ-1,PROJ-2 -from 2026-08-01 -to 2026-09-01
+//	jira-returns -jql 'project = PROJ AND parent is not EMPTY' -out -
+package main
+
+import (
+	"context"
+	"errors"
+	"flag"
+	"fmt"
+	"log/slog"
+	"os"
+	"os/signal"
+	"strings"
+	"syscall"
+	"time"
+
+	"github.com/turganbay/mcp/internal/analytics"
+	"github.com/turganbay/mcp/internal/collect"
+	"github.com/turganbay/mcp/internal/config"
+	"github.com/turganbay/mcp/internal/jira"
+)
+
+type flags struct {
+	jql      string
+	stories  string
+	from     string
+	to       string
+	out      string
+	deadline time.Duration
+}
+
+func main() {
+	if err := run(os.Args[1:]); err != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		os.Exit(1)
+	}
+}
+
+func run(args []string) error {
+	fs := flag.NewFlagSet("jira-returns", flag.ContinueOnError)
+	var f flags
+	fs.StringVar(&f.jql, "jql", "", "JQL selecting the sub-tickets to analyse")
+	fs.StringVar(&f.stories, "stories", "", "comma-separated story keys; their sub-tickets are analysed")
+	fs.StringVar(&f.from, "from", "", "start of the period, inclusive (2006-01-02 or RFC3339)")
+	fs.StringVar(&f.to, "to", "", "end of the period, exclusive (2006-01-02 or RFC3339)")
+	fs.StringVar(&f.out, "out", "report.json", `JSON output path, or "-" for stdout`)
+	fs.DurationVar(&f.deadline, "deadline", 10*time.Minute, "overall deadline for the whole run")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if (f.jql == "") == (f.stories == "") {
+		return errors.New("exactly one of -jql or -stories is required")
+	}
+
+	cfg, err := config.Load(os.Getenv)
+	if err != nil {
+		return err
+	}
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: cfg.LogLevel}))
+	slog.SetDefault(logger)
+
+	from, err := parseDay(f.from, false)
+	if err != nil {
+		return fmt.Errorf("-from: %w", err)
+	}
+	to, err := parseDay(f.to, true)
+	if err != nil {
+		return fmt.Errorf("-to: %w", err)
+	}
+	if !from.IsZero() && !to.IsZero() && !to.After(from) {
+		return fmt.Errorf("-to (%s) must be after -from (%s)", to, from)
+	}
+
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	ctx, cancel := context.WithTimeout(ctx, f.deadline)
+	defer cancel()
+
+	client, err := jira.New(cfg.BaseURL, cfg.Email, cfg.APIToken,
+		jira.WithTimeout(cfg.Timeout),
+		jira.WithConcurrency(cfg.Concurrency),
+		jira.WithLogger(logger),
+	)
+	if err != nil {
+		return err
+	}
+
+	// The status catalog is fetched once: names are localized and renamable,
+	// so everything downstream compares ids.
+	catalog, err := client.StatusCatalog(ctx)
+	if err != nil {
+		return fmt.Errorf("load status catalog: %w", err)
+	}
+	returnedIDs, err := resolveStatusIDs(catalog, cfg.ReturnedStatusIDs, cfg.ReturnedStatusNames)
+	if err != nil {
+		return err
+	}
+	for _, id := range cfg.CodeReviewStatusIDs {
+		if !catalog.Known(id) {
+			logger.Warn("configured code-review status id is unknown on this site", "statusId", id)
+		}
+	}
+	logger.Info("resolved returned statuses", "ids", returnedIDs, "names", namesOf(catalog, returnedIDs))
+
+	storyKeys := splitKeys(f.stories)
+	jql := f.jql
+	if jql == "" {
+		jql = fmt.Sprintf("parent in (%s) ORDER BY created ASC", strings.Join(storyKeys, ", "))
+	}
+
+	report, err := analytics.Run(ctx, collect.New(client, cfg.DeveloperFieldID, logger), jql, analytics.Options{
+		DeveloperFieldID:    cfg.DeveloperFieldID,
+		ReturnedStatusIDs:   returnedIDs,
+		CodeReviewStatusIDs: cfg.CodeReviewStatusIDs,
+		Mode:                cfg.AttributionMode,
+		From:                from,
+		To:                  to,
+		StoryKeys:           storyKeys,
+		StatusNames:         catalog.Names(),
+	})
+	if err != nil {
+		return err
+	}
+
+	return emit(report, f.out)
+}
+
+// resolveStatusIDs prefers explicit ids and falls back to resolving configured
+// names through the catalog. An unresolvable name is a startup error: silently
+// counting nothing would look exactly like a team that never reworks anything.
+func resolveStatusIDs(catalog *jira.StatusCatalog, ids, names []string) ([]string, error) {
+	if len(ids) > 0 {
+		var unknown []string
+		for _, id := range ids {
+			if !catalog.Known(id) {
+				unknown = append(unknown, id)
+			}
+		}
+		if len(unknown) > 0 {
+			return nil, fmt.Errorf("JIRA_RETURNED_STATUS_IDS: unknown status id(s) %v on this site", unknown)
+		}
+		return ids, nil
+	}
+	var out []string
+	for _, name := range names {
+		resolved := catalog.IDsByName(name)
+		if len(resolved) == 0 {
+			return nil, fmt.Errorf("JIRA_RETURNED_STATUS_NAMES: no status named %q on this site", name)
+		}
+		out = append(out, resolved...)
+	}
+	return out, nil
+}
+
+func namesOf(catalog *jira.StatusCatalog, ids []string) []string {
+	out := make([]string, 0, len(ids))
+	for _, id := range ids {
+		out = append(out, catalog.NameByID(id))
+	}
+	return out
+}
+
+// parseDay accepts a plain date or a full RFC3339 timestamp. A plain -to date
+// is treated as the end of that day, which is what "until the 31st" means to a
+// human.
+func parseDay(s string, endOfDay bool) (time.Time, error) {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return time.Time{}, nil
+	}
+	if t, err := time.Parse(time.RFC3339, s); err == nil {
+		return t.UTC(), nil
+	}
+	t, err := time.Parse("2006-01-02", s)
+	if err != nil {
+		return time.Time{}, fmt.Errorf("%q is neither 2006-01-02 nor RFC3339", s)
+	}
+	if endOfDay {
+		t = t.AddDate(0, 0, 1)
+	}
+	return t.UTC(), nil
+}
+
+func splitKeys(v string) []string {
+	var out []string
+	for _, p := range strings.Split(v, ",") {
+		if k := strings.TrimSpace(p); k != "" {
+			out = append(out, k)
+		}
+	}
+	return out
+}

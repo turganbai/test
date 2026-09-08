@@ -1,0 +1,7 @@
+[
+  {"id": "3", "name": "In Progress", "self": "https://example.atlassian.net/rest/api/3/status/3"},
+  {"id": "10001", "name": "Code Review", "self": "https://example.atlassian.net/rest/api/3/status/10001"},
+  {"id": "10002", "name": "Stage", "self": "https://example.atlassian.net/rest/api/3/status/10002"},
+  {"id": "10007", "name": "Returned", "self": "https://example.atlassian.net/rest/api/3/status/10007"},
+  {"id": "10008", "name": "returned", "self": "https://example.atlassian.net/rest/api/3/status/10008"}
+]

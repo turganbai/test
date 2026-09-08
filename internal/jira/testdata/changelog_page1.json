@@ -1,0 +1,28 @@
+{
+  "self": "https://example.atlassian.net/rest/api/3/issue/SUB-1/changelog?startAt=0",
+  "nextPage": "https://example.atlassian.net/rest/api/3/issue/SUB-1/changelog?startAt=2",
+  "maxResults": 2,
+  "startAt": 0,
+  "total": 4,
+  "isLast": false,
+  "values": [
+    {
+      "id": "8001",
+      "author": {"accountId": "qa-1", "displayName": "Qa Engineer", "active": true},
+      "created": "2026-08-02T09:00:00.000+0000",
+      "items": [
+        {"field": "status", "fieldtype": "jira", "fieldId": "status",
+         "from": "10001", "fromString": "Code Review", "to": "10007", "toString": "Returned"}
+      ]
+    },
+    {
+      "id": "8002",
+      "author": {"accountId": "qa-1", "displayName": "Qa Engineer", "active": true},
+      "created": "2026-08-03T09:00:00.000+0000",
+      "items": [
+        {"field": "status", "fieldtype": "jira", "fieldId": "status",
+         "from": "10001", "fromString": "Ревью", "to": "10007", "toString": "Возвращено"}
+      ]
+    }
+  ]
+}

@@ -1,0 +1,36 @@
+{
+  "isLast": true,
+  "nextPageToken": null,
+  "issues": [
+    {
+      "id": "10103",
+      "key": "SUB-3",
+      "fields": {
+        "summary": "Handle the declined-card path",
+        "status": {"id": "10002", "name": "Stage"},
+        "assignee": {"accountId": "dev-b", "displayName": "Bob Dev", "active": true},
+        "parent": {
+          "id": "10002",
+          "key": "STORY-2",
+          "fields": {"summary": "Payment errors"}
+        }
+      },
+      "changelog": {
+        "startAt": 0,
+        "maxResults": 100,
+        "total": 1,
+        "histories": [
+          {
+            "id": "9201",
+            "author": {"accountId": "qa-1", "displayName": "Qa Engineer", "active": true},
+            "created": "2026-08-04T10:30:00.000+0000",
+            "items": [
+              {"field": "status", "fieldtype": "jira", "fieldId": "status",
+               "from": "10001", "fromString": "Ревью", "to": "10007", "toString": "Возвращено"}
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}
