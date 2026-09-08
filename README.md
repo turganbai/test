@@ -38,12 +38,13 @@ All configuration is environment-only; the API token never comes from a flag and
 
 ¹ One of ids or names is required. Ids win when both are set.
 
-Finding your status ids:
+Finding your status ids — the tool will list them for you:
 
 ```bash
-curl -s -u "$JIRA_EMAIL:$JIRA_API_TOKEN" "$JIRA_BASE_URL/rest/api/3/status" \
-  | python3 -c 'import json,sys; [print(s["id"], s["name"]) for s in json.load(sys.stdin)]'
+./jira-returns -statuses
 ```
+
+Prefer ids over names in the long run: names are localized and get renamed, ids don't.
 
 ## Attribution modes
 

@@ -17,8 +17,10 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"sort"
 	"strings"
 	"syscall"
+	"text/tabwriter"
 	"time"
 
 	"github.com/turganbay/mcp/internal/analytics"
@@ -34,6 +36,7 @@ type flags struct {
 	to       string
 	out      string
 	deadline time.Duration
+	statuses bool
 }
 
 func main() {
@@ -60,11 +63,12 @@ func run(args []string, stderr io.Writer) error {
 	fs.StringVar(&f.to, "to", "", "end of the period, exclusive (2006-01-02 or RFC3339)")
 	fs.StringVar(&f.out, "out", "report.json", `JSON output path, or "-" for stdout`)
 	fs.DurationVar(&f.deadline, "deadline", 10*time.Minute, "overall deadline for the whole run")
+	fs.BoolVar(&f.statuses, "statuses", false, "print this site's status ids and names, then exit")
 	fs.Usage = func() { usage(fs) }
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
-	if (f.jql == "") == (f.stories == "") {
+	if !f.statuses && (f.jql == "") == (f.stories == "") {
 		// The most likely way to land here is a bare invocation, so show what
 		// to type rather than only what is wrong.
 		fs.Usage()
@@ -110,6 +114,11 @@ func run(args []string, stderr io.Writer) error {
 	if err != nil {
 		return fmt.Errorf("load status catalog: %w", err)
 	}
+	if f.statuses {
+		printStatuses(os.Stdout, catalog)
+		return nil
+	}
+
 	returnedIDs, err := resolveStatusIDs(catalog, cfg.ReturnedStatusIDs, cfg.ReturnedStatusNames)
 	if err != nil {
 		return err
@@ -152,6 +161,7 @@ and which developer each return is attributed to.
 Usage:
   jira-returns -stories KEY[,KEY...] [-from DATE] [-to DATE] [-out FILE]
   jira-returns -jql QUERY            [-from DATE] [-to DATE] [-out FILE]
+  jira-returns -statuses             (list this site's status ids and names)
 
 Examples:
   jira-returns -stories PROJ-101,PROJ-102 -from 2026-08-01 -to 2026-08-31
@@ -179,7 +189,8 @@ func resolveStatusIDs(catalog *jira.StatusCatalog, ids, names []string) ([]strin
 			}
 		}
 		if len(unknown) > 0 {
-			return nil, fmt.Errorf("JIRA_RETURNED_STATUS_IDS: unknown status id(s) %v on this site", unknown)
+			return nil, fmt.Errorf("JIRA_RETURNED_STATUS_IDS: unknown status id(s) %v on this site; "+
+				"run with -statuses to list them", unknown)
 		}
 		return ids, nil
 	}
@@ -187,11 +198,50 @@ func resolveStatusIDs(catalog *jira.StatusCatalog, ids, names []string) ([]strin
 	for _, name := range names {
 		resolved := catalog.IDsByName(name)
 		if len(resolved) == 0 {
-			return nil, fmt.Errorf("JIRA_RETURNED_STATUS_NAMES: no status named %q on this site", name)
+			return nil, fmt.Errorf("JIRA_RETURNED_STATUS_NAMES: no status named %q on this site.%s\n"+
+				"  Status names are localized and get renamed; run with -statuses to list all of them,\n"+
+				"  then set JIRA_RETURNED_STATUS_IDS to the ids (ids never change).",
+				name, suggestions(catalog, name))
 		}
 		out = append(out, resolved...)
 	}
 	return out, nil
+}
+
+// suggestions offers near matches so a failed lookup names the alternatives
+// rather than sending the reader off to another tool.
+func suggestions(catalog *jira.StatusCatalog, name string) string {
+	needle := strings.ToLower(strings.TrimSpace(name))
+	var close []string
+	for id, n := range catalog.Names() {
+		l := strings.ToLower(n)
+		if strings.Contains(l, needle) || strings.Contains(needle, l) {
+			close = append(close, fmt.Sprintf("%s (id %s)", n, id))
+		}
+	}
+	if len(close) == 0 {
+		return ""
+	}
+	sort.Strings(close)
+	return " Did you mean: " + strings.Join(close, ", ") + "?"
+}
+
+// printStatuses lists the site's statuses so the ids can be copied into
+// JIRA_RETURNED_STATUS_IDS.
+func printStatuses(w io.Writer, catalog *jira.StatusCatalog) {
+	names := catalog.Names()
+	ids := make([]string, 0, len(names))
+	for id := range names {
+		ids = append(ids, id)
+	}
+	sort.Slice(ids, func(i, j int) bool { return names[ids[i]] < names[ids[j]] })
+
+	tw := tabwriter.NewWriter(w, 0, 4, 2, ' ', 0)
+	fmt.Fprintln(tw, "ID\tNAME")
+	for _, id := range ids {
+		fmt.Fprintf(tw, "%s\t%s\n", id, names[id])
+	}
+	tw.Flush()
 }
 
 func namesOf(catalog *jira.StatusCatalog, ids []string) []string {

@@ -53,6 +53,50 @@ func TestResolveStatusIDs(t *testing.T) {
 	}
 }
 
+func TestResolveStatusIDs_ErrorSuggestsNearMatches(t *testing.T) {
+	cat := jira.NewStatusCatalog([]jira.Status{
+		{ID: "10007", Name: "Returned to dev"},
+		{ID: "10009", Name: "Возвращено"},
+		{ID: "3", Name: "In Progress"},
+	})
+	_, err := resolveStatusIDs(cat, nil, []string{"Returned"})
+	if err == nil {
+		t.Fatal("resolveStatusIDs succeeded on a name the site does not have")
+	}
+	msg := err.Error()
+	if !strings.Contains(msg, "Returned to dev (id 10007)") {
+		t.Errorf("error does not suggest the near match:\n%s", msg)
+	}
+	if strings.Contains(msg, "In Progress") {
+		t.Errorf("error suggests an unrelated status:\n%s", msg)
+	}
+	if !strings.Contains(msg, "-statuses") {
+		t.Errorf("error does not point at -statuses:\n%s", msg)
+	}
+
+	// Nothing similar: the message must still say what to do next.
+	_, err = resolveStatusIDs(cat, nil, []string{"Rejected"})
+	if err == nil || strings.Contains(err.Error(), "Did you mean") {
+		t.Errorf("err = %v, want no bogus suggestion", err)
+	}
+}
+
+func TestPrintStatuses(t *testing.T) {
+	var buf bytes.Buffer
+	printStatuses(&buf, jira.NewStatusCatalog([]jira.Status{
+		{ID: "10007", Name: "Returned"},
+		{ID: "3", Name: "In Progress"},
+	}))
+	out := buf.String()
+	if !strings.Contains(out, "10007") || !strings.Contains(out, "Returned") {
+		t.Errorf("listing is missing a status:\n%s", out)
+	}
+	// Sorted by name, so In Progress comes before Returned.
+	if strings.Index(out, "In Progress") > strings.Index(out, "Returned") {
+		t.Errorf("listing is not sorted by name:\n%s", out)
+	}
+}
+
 func TestParseDay(t *testing.T) {
 	tests := []struct {
 		in       string
