@@ -1,0 +1,27 @@
+### GET request to example server
+GET https://examples.http-client.intellij.net/get
+    ?generated-in=GoLand
+
+###
+
+# curl --request GET
+#  --url 'https://yourcompany.atlassian.net/rest/api/3/field'
+#  --user 'JIRA_EMAIL:JIRA_API_TOKEN'
+#  --header 'Accept: application/json'
+GET {{jira_base_url}}/rest/api/3/field
+Authorization: Basic {{jira_email}} {{jira_api_token}}
+Accept: application/json
+
+###
+
+
+
+# curl --request GET
+#  --url 'https://turganbay030282.atlassian.net/rest/api/3/status'
+#  --user 'Ваш_Email:Ваш_API_Token'
+#  --header 'Accept: application/json'
+GET {{jira_base_url}}/rest/api/3/status
+Authorization: Basic {{jira_email}} {{jira_api_token}}
+Accept: application/json
+
+###
