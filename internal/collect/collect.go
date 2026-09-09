@@ -9,8 +9,8 @@ import (
 	"log/slog"
 	"sort"
 
-	"github.com/turganbay/mcp/internal/analytics"
-	"github.com/turganbay/mcp/internal/jira"
+	"mcp/internal/analytics"
+	"mcp/internal/jira"
 )
 
 // Collector implements analytics.IssueFetcher.

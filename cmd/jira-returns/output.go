@@ -8,7 +8,7 @@ import (
 	"text/tabwriter"
 	"time"
 
-	"github.com/turganbay/mcp/internal/analytics"
+	"mcp/internal/analytics"
 )
 
 // emit writes the JSON document and prints a short human summary. When the

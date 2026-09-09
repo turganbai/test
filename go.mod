@@ -1,3 +1,3 @@
-module github.com/turganbay/mcp
+module mcp
 
 go 1.27

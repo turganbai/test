@@ -1,3 +1,9 @@
 .DS_Store
 .idea
 http_dot/http-client.private.env.json
+.env
+.env.*
+!.env.example
+
+# The default -out target: a generated report, and it carries issue keys.
+report.json

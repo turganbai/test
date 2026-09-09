@@ -20,7 +20,21 @@ stdout, or to stderr when the JSON is on stdout.
 
 ## Configuration
 
-All configuration is environment-only; the API token never comes from a flag and is never logged.
+All configuration comes from the environment, or from a `.env` file layered under it; the API token
+never comes from a flag and is never logged.
+
+Copy [`.env.example`](.env.example) to `.env` and fill it in:
+
+```bash
+cp .env.example .env
+```
+
+`.env` is read from the working directory when it exists — its absence is not an error. `-env FILE`
+reads another file instead, and a file named that way must exist. **A variable already exported in
+the environment always wins over the file**, so a local `.env` never silently overrides CI or a
+shell. Lines are `KEY=VALUE`, with `#` comments, an optional `export ` prefix, and optional quoting
+(`"..."` takes `\n`, `\t`, `\"` escapes; `'...'` is literal). `.env` is gitignored; don't commit
+the token.
 
 | Variable | Required | Meaning |
 |---|---|---|
@@ -38,7 +52,9 @@ All configuration is environment-only; the API token never comes from a flag and
 
 ¹ One of ids or names is required. Ids win when both are set.
 
-Finding your status ids — the tool will list them for you:
+Finding your status ids — the tool will list them for you, and this one command
+needs only `JIRA_BASE_URL`, `JIRA_EMAIL` and `JIRA_API_TOKEN`, so you can run it
+before you know what to put in the rest:
 
 ```bash
 ./jira-returns -statuses

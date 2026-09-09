@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/turganbay/mcp/internal/analytics"
+	"mcp/internal/analytics"
 )
 
 // Defaults.
@@ -43,10 +43,25 @@ type Config struct {
 // Getenv is the environment accessor, injectable for tests.
 type Getenv func(string) string
 
+// Scope is how much of the configuration a command actually needs.
+type Scope int
+
+const (
+	// ScopeReport validates everything: a report needs the developer field and
+	// the returned statuses on top of the credentials.
+	ScopeReport Scope = iota
+	// ScopeConnect validates only what it takes to reach the site. -statuses
+	// exists to *discover* the returned status ids, so demanding them first
+	// would make the discovery command unusable to the person who needs it.
+	ScopeConnect
+)
+
 // Load reads the configuration and reports every problem at once, so a
 // misconfigured deployment is fixed in one pass rather than one variable per
 // run.
-func Load(getenv Getenv) (*Config, error) {
+func Load(getenv Getenv) (*Config, error) { return load(getenv, ScopeReport) }
+
+func load(getenv Getenv, scope Scope) (*Config, error) {
 	cfg := &Config{
 		BaseURL:             strings.TrimSpace(getenv("JIRA_BASE_URL")),
 		Email:               strings.TrimSpace(getenv("JIRA_EMAIL")),
@@ -55,6 +70,7 @@ func Load(getenv Getenv) (*Config, error) {
 		ReturnedStatusIDs:   splitList(getenv("JIRA_RETURNED_STATUS_IDS")),
 		ReturnedStatusNames: splitList(getenv("JIRA_RETURNED_STATUS_NAMES")),
 		CodeReviewStatusIDs: splitList(getenv("JIRA_CODE_REVIEW_STATUS_IDS")),
+		AttributionMode:     analytics.ModeCurrent,
 		Concurrency:         DefaultConcurrency,
 		Timeout:             DefaultTimeout,
 		LogLevel:            slog.LevelInfo,
@@ -73,29 +89,29 @@ func Load(getenv Getenv) (*Config, error) {
 	if cfg.APIToken == "" {
 		errs = append(errs, errors.New("JIRA_API_TOKEN is required; create one at https://id.atlassian.com/manage-profile/security/api-tokens"))
 	}
-	if cfg.DeveloperFieldID == "" {
-		errs = append(errs, errors.New(`JIRA_DEVELOPER_FIELD_ID is required, e.g. customfield_10050; find it with GET /rest/api/3/field`))
-	} else if !strings.HasPrefix(cfg.DeveloperFieldID, "customfield_") {
-		errs = append(errs, fmt.Errorf("JIRA_DEVELOPER_FIELD_ID %q does not look like a custom field id (expected customfield_NNNNN)", cfg.DeveloperFieldID))
-	}
-	if len(cfg.ReturnedStatusIDs) == 0 && len(cfg.ReturnedStatusNames) == 0 {
-		errs = append(errs, errors.New("JIRA_RETURNED_STATUS_IDS is required (comma-separated status ids); JIRA_RETURNED_STATUS_NAMES may be used instead and is resolved at startup"))
-	}
-	for _, id := range append(append([]string{}, cfg.ReturnedStatusIDs...), cfg.CodeReviewStatusIDs...) {
-		if _, err := strconv.Atoi(id); err != nil {
-			errs = append(errs, fmt.Errorf("status id %q must be numeric (a status *name* goes in JIRA_RETURNED_STATUS_NAMES)", id))
+	// Everything below describes the report rather than the connection, so
+	// ScopeConnect skips it: see the Scope doc.
+	if scope == ScopeReport {
+		if cfg.DeveloperFieldID == "" {
+			errs = append(errs, errors.New(`JIRA_DEVELOPER_FIELD_ID is required, e.g. customfield_10050; find it with GET /rest/api/3/field`))
+		} else if !strings.HasPrefix(cfg.DeveloperFieldID, "customfield_") {
+			errs = append(errs, fmt.Errorf("JIRA_DEVELOPER_FIELD_ID %q does not look like a custom field id (expected customfield_NNNNN)", cfg.DeveloperFieldID))
 		}
-	}
-
-	mode := strings.TrimSpace(getenv("JIRA_ATTRIBUTION_MODE"))
-	if mode == "" {
-		cfg.AttributionMode = analytics.ModeCurrent
-	} else {
-		m, err := analytics.ParseAttributionMode(mode)
-		if err != nil {
-			errs = append(errs, fmt.Errorf("JIRA_ATTRIBUTION_MODE: %w", err))
+		if len(cfg.ReturnedStatusIDs) == 0 && len(cfg.ReturnedStatusNames) == 0 {
+			errs = append(errs, errors.New("JIRA_RETURNED_STATUS_IDS is required (comma-separated status ids); JIRA_RETURNED_STATUS_NAMES may be used instead and is resolved at startup"))
 		}
-		cfg.AttributionMode = m
+		for _, id := range append(append([]string{}, cfg.ReturnedStatusIDs...), cfg.CodeReviewStatusIDs...) {
+			if _, err := strconv.Atoi(id); err != nil {
+				errs = append(errs, fmt.Errorf("status id %q must be numeric (a status *name* goes in JIRA_RETURNED_STATUS_NAMES)", id))
+			}
+		}
+		if mode := strings.TrimSpace(getenv("JIRA_ATTRIBUTION_MODE")); mode != "" {
+			m, err := analytics.ParseAttributionMode(mode)
+			if err != nil {
+				errs = append(errs, fmt.Errorf("JIRA_ATTRIBUTION_MODE: %w", err))
+			}
+			cfg.AttributionMode = m
+		}
 	}
 
 	if v := strings.TrimSpace(getenv("JIRA_CONCURRENCY")); v != "" {

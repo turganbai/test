@@ -1,8 +1,8 @@
 // Command jira-returns reports how often issues were sent back to "returned",
 // and which developer each return is counted against.
 //
-// Configuration comes from the environment (see internal/config); the query
-// and the reporting period come from flags:
+// Configuration comes from the environment, or from a .env file layered under
+// it (see internal/config); the query and the reporting period come from flags:
 //
 //	jira-returns -stories PROJ-1,PROJ-2 -from 2026-08-01 -to 2026-09-01
 //	jira-returns -jql 'project = PROJ AND parent is not EMPTY' -out -
@@ -23,10 +23,10 @@ import (
 	"text/tabwriter"
 	"time"
 
-	"github.com/turganbay/mcp/internal/analytics"
-	"github.com/turganbay/mcp/internal/collect"
-	"github.com/turganbay/mcp/internal/config"
-	"github.com/turganbay/mcp/internal/jira"
+	"mcp/internal/analytics"
+	"mcp/internal/collect"
+	"mcp/internal/config"
+	"mcp/internal/jira"
 )
 
 type flags struct {
@@ -35,6 +35,7 @@ type flags struct {
 	from     string
 	to       string
 	out      string
+	env      string
 	deadline time.Duration
 	statuses bool
 }
@@ -62,6 +63,7 @@ func run(args []string, stderr io.Writer) error {
 	fs.StringVar(&f.from, "from", "", "start of the period, inclusive (2006-01-02 or RFC3339)")
 	fs.StringVar(&f.to, "to", "", "end of the period, exclusive (2006-01-02 or RFC3339)")
 	fs.StringVar(&f.out, "out", "report.json", `JSON output path, or "-" for stdout`)
+	fs.StringVar(&f.env, "env", "", `env file layered under the environment (default ".env" in the working directory, when present)`)
 	fs.DurationVar(&f.deadline, "deadline", 10*time.Minute, "overall deadline for the whole run")
 	fs.BoolVar(&f.statuses, "statuses", false, "print this site's status ids and names, then exit")
 	fs.Usage = func() { usage(fs) }
@@ -75,7 +77,13 @@ func run(args []string, stderr io.Writer) error {
 		return errors.New("exactly one of -jql or -stories is required")
 	}
 
-	cfg, err := config.Load(os.Getenv)
+	// -statuses is how the reader discovers their returned status ids, so it
+	// must not be blocked by the configuration it exists to help write.
+	scope := config.ScopeReport
+	if f.statuses {
+		scope = config.ScopeConnect
+	}
+	cfg, err := config.LoadFile(os.LookupEnv, f.env, scope)
 	if err != nil {
 		return err
 	}
@@ -171,9 +179,11 @@ Flags:
 `)
 	fs.PrintDefaults()
 	fmt.Fprint(w, `
-Configuration comes from the environment; see README.md.
+Configuration comes from the environment, or from a .env file in the current
+directory (-env FILE for another path); the real environment wins. See README.md.
 Required: JIRA_BASE_URL, JIRA_EMAIL, JIRA_API_TOKEN, JIRA_DEVELOPER_FIELD_ID,
 and one of JIRA_RETURNED_STATUS_IDS / JIRA_RETURNED_STATUS_NAMES.
+-statuses needs only the first three: it is how you find the last one.
 `)
 }
 

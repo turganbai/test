@@ -12,8 +12,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/turganbay/mcp/internal/analytics"
-	"github.com/turganbay/mcp/internal/jira"
+	"mcp/internal/analytics"
+	"mcp/internal/jira"
 )
 
 const devField = "customfield_10050"

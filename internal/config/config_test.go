@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/turganbay/mcp/internal/analytics"
+	"mcp/internal/analytics"
 )
 
 func env(m map[string]string) Getenv {

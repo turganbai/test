@@ -20,7 +20,7 @@ or run installers against it. Two files in there are worth knowing about specifi
 
 ## Go module
 
-- Module path: `github.com/turganbay/mcp` (no git remote yet; the path is a placeholder that matches
+- Module path: `mcp` (no git remote yet; the path is a placeholder that matches
   the directory name — change it here *and* in every import if the repo moves)
 - Go version: `1.27`
 - Dependencies: none. Standard library only, deliberately — keep it that way unless there is a
@@ -32,7 +32,7 @@ or run installers against it. Two files in there are worth knowing about specifi
     declares the `IssueFetcher` interface it consumes.
   - `internal/collect/` — the adapter that implements `analytics.IssueFetcher` on top of
     `internal/jira`. The only package importing both.
-  - `internal/config/` — env loading and validation.
+  - `internal/config/` — env loading and validation, plus the dotenv parser (`dotenv.go`).
 
 Dependency direction is one-way: `cmd` → `collect` → {`jira`, `analytics`}, and `analytics` imports
 nothing of ours. Don't let `analytics` grow an import of `internal/jira`.
@@ -57,7 +57,7 @@ local to this repo — see the "Working with Claude Code" section below.
 | `internal/jira` | `Client.SearchIssues` (POST `/rest/api/3/search/jql`, `nextPageToken` cursor), `Client.IssueChangelog` (GET `/rest/api/3/issue/{key}/changelog`, `startAt` offsets), `Client.StatusCatalog` (GET `/rest/api/3/status`). Retries 429/5xx with `Retry-After` + jittered backoff. | [Issue search](https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-issue-search/), [Issues](https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-issues/) |
 | `internal/analytics` | `Compute([]Issue, Options, []Warning) Report` — pure, no I/O. `Run` is the only thing here that touches a fetcher. | — |
 | `internal/collect` | `Collector.FetchIssues` maps Jira DTOs onto `analytics.Issue`, flattening histories/items into time-ordered `Change`s. | — |
-| `cmd/jira-returns` | `-jql` / `-stories`, `-from` / `-to`, `-out`. Config comes from env only (see `internal/config`). | `README.md` |
+| `cmd/jira-returns` | `-jql` / `-stories`, `-from` / `-to`, `-out`, `-env`. Config comes from env, or a `.env` layered *under* it (see `internal/config`). | `README.md` |
 
 Two invariants worth not rediscovering the hard way:
 - **Status transitions are matched on `item.to` (the status *id*), never `toString`.** Status names

@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/turganbay/mcp/internal/jira"
+	"mcp/internal/jira"
 )
 
 func catalog() *jira.StatusCatalog {
