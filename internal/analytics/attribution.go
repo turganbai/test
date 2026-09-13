@@ -44,8 +44,9 @@ func resolve(iss Issue, developerFieldID string, mode AttributionMode, t time.Ti
 // valueAt reconstructs a single-user field's value at time t by replaying the
 // changelog backwards from the field's current value.
 //
-// changes must be ascending by time. Walking backwards, every change that
-// happened strictly after t is undone by taking its "from" side; the first
+// changes must be ascending by time — the contract on Issue.Changelog, which
+// Compute normalizes to before any of this runs. Walking backwards, every
+// change that happened strictly after t is undone by taking its "from" side; the first
 // change at or before t stops the walk, because it is already reflected in the
 // value we are holding. A change with exactly the same timestamp as the
 // transition is therefore treated as already applied.

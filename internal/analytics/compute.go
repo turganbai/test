@@ -46,6 +46,7 @@ func Compute(issues []Issue, opts Options, warnings []Warning) Report {
 	devRework := map[string][]float64{}
 
 	for _, iss := range issues {
+		iss.Changelog = ascendingByTime(iss.Changelog)
 		if iss.ParentKey == "" {
 			// Not a sub-ticket. Register it as a story so that a story with no
 			// sub-tickets still appears in the report.
@@ -188,15 +189,28 @@ func returnEvents(iss Issue, opts Options, returned, codeReview map[string]bool)
 	return events
 }
 
-// codeReviewTimes collects, in ascending order, the instant of every
-// transition into a code-review status.
+// ascendingByTime returns changes ordered by At, as Issue.Changelog promises.
 //
-// Sorting here is what makes the metric independent of changelog order.
-// reworkAfter used to take the first match it walked past, which is the
-// earliest one only if the input happens to be ordered — and nothing in the
-// Issue type promises that, least of all a changelog stitched together from
-// separately fetched pages. When the order broke, the rework time silently
-// grew: no panic, no warning, just a larger number.
+// The check comes first and the common path allocates nothing: input that
+// already honours the contract is returned as it is. Only input that violates
+// it is sorted, and then into a copy — Compute is a pure function, so it must
+// not reorder a slice its caller still owns.
+//
+// This is the one place in the package that orders a changelog — the report's
+// own rows are sorted elsewhere, on their own keys. Every changelog consumer
+// below reads the contract instead of defending itself, which is what keeps
+// them from disagreeing about what "next" means.
+func ascendingByTime(changes []Change) []Change {
+	if sort.SliceIsSorted(changes, func(i, j int) bool { return changes[i].At.Before(changes[j].At) }) {
+		return changes
+	}
+	out := append(make([]Change, 0, len(changes)), changes...)
+	sort.SliceStable(out, func(i, j int) bool { return out[i].At.Before(out[j].At) })
+	return out
+}
+
+// codeReviewTimes collects the instant of every transition into a code-review
+// status. The result is ascending because Issue.Changelog is.
 func codeReviewTimes(changes []Change, codeReview map[string]bool) []time.Time {
 	var ts []time.Time
 	for _, ch := range changes {
@@ -204,17 +218,16 @@ func codeReviewTimes(changes []Change, codeReview map[string]bool) []time.Time {
 			ts = append(ts, ch.At)
 		}
 	}
-	sort.Slice(ts, func(i, j int) bool { return ts[i].Before(ts[j]) })
 	return ts
 }
 
 // reworkAfter measures the time from a return until the next transition into
 // code-review, i.e. how long the developer took to hand the work back.
 //
-// crTimes must be ascending, as codeReviewTimes returns it. sort.Search finds
-// the first instant strictly after from, so a code-review transition stamped at
-// the same moment as the return does not count — the same boundary the linear
-// scan's At.After(from) drew.
+// crTimes must be ascending, which it is because Issue.Changelog is.
+// sort.Search finds the first instant strictly after from, so a code-review
+// transition stamped at the same moment as the return does not count — the
+// same boundary the linear scan's At.After(from) drew.
 func reworkAfter(crTimes []time.Time, from time.Time) (time.Duration, bool) {
 	i := sort.Search(len(crTimes), func(i int) bool {
 		return crTimes[i].After(from)

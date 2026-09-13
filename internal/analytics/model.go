@@ -92,7 +92,16 @@ type Issue struct {
 	// Assignee is the current assignee, used only as a fallback.
 	Assignee User `json:"assignee"`
 
-	// Changelog holds every change we could retrieve, ascending by time.
+	// Changelog holds every change we could retrieve.
+	//
+	// It MUST be ascending by At. This is a contract, not a description: the
+	// replay in valueAt walks it backwards and stops at the first change at or
+	// before the instant it is reconstructing, so an out-of-order entry makes
+	// it stop early and return a partially unwound value — a real person, just
+	// not the right one, with nothing to signal it. Whoever builds an Issue
+	// honours this; collect.flatten sorts once, after the changelog top-up
+	// pages are merged, and Compute normalizes defensively because it is
+	// exported and cannot see where its input came from.
 	Changelog []Change `json:"-"`
 }
 

@@ -183,8 +183,10 @@ func flatten(issueKey, developerFieldID string, histories []jira.Changelog) ([]a
 			})
 		}
 	}
-	// Ascending order is what the replay in analytics relies on; Jira usually
-	// returns it that way already, but nothing in the contract promises it.
+	// analytics.Issue.Changelog is contractually ascending by time, and this
+	// is the boundary that honours it: histories arrive from the search and,
+	// for a topped-up changelog, from separately fetched pages, and neither
+	// source promises an order across the merge.
 	sort.SliceStable(out, func(i, j int) bool { return out[i].At.Before(out[j].At) })
 	return out, warnings
 }

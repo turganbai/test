@@ -64,9 +64,13 @@ func TestReworkAfter_EachReturnMapsToTheNearestFollowingReview(t *testing.T) {
 	}
 }
 
-// The ordering fix: a shuffled changelog must produce exactly what the sorted
-// one does. The old linear scan returned whichever match it walked past first.
-func TestReworkAfter_UnsortedChangelogMatchesSorted(t *testing.T) {
+// A shuffled changelog must produce exactly what the sorted one does.
+//
+// This goes through Compute rather than returnEvents: Issue.Changelog is
+// contractually ascending and Compute is what normalizes to it, so the
+// internals below are entitled to assume order and only the exported entry
+// point can be handed a violation.
+func TestCompute_ReworkIsIndependentOfChangelogOrder(t *testing.T) {
 	base := ts(t, "2026-09-10T00:00:00Z")
 	h := func(n int) time.Time { return base.Add(time.Duration(n) * time.Hour) }
 
@@ -77,15 +81,23 @@ func TestReworkAfter_UnsortedChangelogMatchesSorted(t *testing.T) {
 		status(h(6), inReview),
 		status(h(8), inReview),
 	}
-	opts, ret, cr := reworkOpts(), idSet([]string{returnedID}), idSet([]string{inReview})
-	want := reworkOf(returnEvents(Issue{Key: "K", Changelog: sorted}, opts, ret, cr))
+	// Compute reports rework per event, so gather it back off the report.
+	reworkVia := func(changes []Change) []float64 {
+		rep := Compute([]Issue{{Key: "K", ParentKey: "S-1", Changelog: changes}}, reworkOpts(), nil)
+		var out []float64
+		for _, i := range rep.Issues {
+			out = append(out, reworkOf(i.Events)...)
+		}
+		return out
+	}
+	want := reworkVia(sorted)
 
 	rng := rand.New(rand.NewSource(7))
 	for trial := 0; trial < 200; trial++ {
 		shuffled := append([]Change(nil), sorted...)
 		rng.Shuffle(len(shuffled), func(i, j int) { shuffled[i], shuffled[j] = shuffled[j], shuffled[i] })
 
-		got := reworkOf(returnEvents(Issue{Key: "K", Changelog: shuffled}, opts, ret, cr))
+		got := reworkVia(shuffled)
 		if len(got) != len(want) {
 			t.Fatalf("trial %d: %d events, want %d", trial, len(got), len(want))
 		}
@@ -156,18 +168,22 @@ func TestReworkAfter_IssueWithNoReviewTransitions(t *testing.T) {
 
 // codeReviewTimes must ignore non-status changes that happen to carry a
 // code-review id in their "to" field.
+//
+// The input is ascending because Issue.Changelog is: codeReviewTimes no longer
+// sorts, it filters, and its output is ordered only because its input was.
+// Order-independence is tested at Compute, the one place that normalizes.
 func TestCodeReviewTimes_OnlyStatusChanges(t *testing.T) {
 	base := ts(t, "2026-09-10T00:00:00Z")
 	got := codeReviewTimes([]Change{
-		{At: base.Add(2 * time.Hour), FieldID: StatusFieldID, To: inReview},
 		{At: base, FieldID: "customfield_10043", To: inReview}, // not a status change
 		{At: base.Add(time.Hour), FieldID: StatusFieldID, To: inReview},
+		{At: base.Add(2 * time.Hour), FieldID: StatusFieldID, To: inReview},
 	}, idSet([]string{inReview}))
 
 	if len(got) != 2 {
 		t.Fatalf("times = %v, want only the two status changes", got)
 	}
 	if !got[0].Before(got[1]) {
-		t.Errorf("times = %v, want ascending", got)
+		t.Errorf("times = %v, want the input's order preserved", got)
 	}
 }
