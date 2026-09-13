@@ -25,3 +25,58 @@ Authorization: Basic {{jira_email}} {{jira_api_token}}
 Accept: application/json
 
 ###
+
+
+@story = KAN-10
+@issue = KAN-3
+@devField = customfield_10043
+
+### 3. Поиск подзадач с историей
+POST {{jira_base_url}}/rest/api/3/search/jql
+Authorization: Basic {{jira_email}} {{jira_api_token}}
+Accept: application/json
+Content-Type: application/json
+
+{
+  "jql": "parent in ({{story}}) ORDER BY created ASC",
+  "fields": ["summary", "assignee", "status", "parent", "{{devField}}"],
+  "expand": "changelog",
+  "maxResults": 100
+}
+
+### 4. Поиск — следующая страница
+POST {{jira_base_url}}/rest/api/3/search/jql
+Authorization: Basic {{jira_email}} {{jira_api_token}}
+Accept: application/json
+Content-Type: application/json
+
+{
+  "jql": "parent in ({{story}}) ORDER BY created ASC",
+  "fields": ["summary", "assignee", "status", "parent", "{{devField}}"],
+  "expand": "changelog",
+  "maxResults": 100,
+  "nextPageToken": "PASTE_TOKEN_HERE"
+}
+
+### 5. Полная история задачи
+GET {{jira_base_url}}/rest/api/3/issue/{{issue}}/changelog?startAt=0&maxResults=100
+Authorization: Basic {{jira_email}} {{jira_api_token}}
+Accept: application/json
+
+### 6. История — следующая страница
+GET {{jira_base_url}}/rest/api/3/issue/{{issue}}/changelog?startAt=100&maxResults=100
+Authorization: Basic {{jira_email}} {{jira_api_token}}
+Accept: application/json
+
+### 7. Поиск по произвольному JQL
+POST {{jira_base_url}}/rest/api/3/search/jql
+Authorization: Basic {{jira_email}} {{jira_api_token}}
+Accept: application/json
+Content-Type: application/json
+
+{
+  "jql": "project = KAN AND parent is not EMPTY ORDER BY created ASC",
+  "fields": ["summary", "assignee", "status", "parent", "{{devField}}"],
+  "expand": "changelog",
+  "maxResults": 100
+}
