@@ -110,3 +110,63 @@ func TestReworkColumn(t *testing.T) {
 		}
 	}
 }
+
+// The column exists so a reader can see that a counted return came from the
+// assignee rather than the Developer field. It appears only when there is any.
+func subTicketHeader(t *testing.T, out string) string {
+	t.Helper()
+	for _, line := range strings.Split(out, "\n") {
+		if strings.HasPrefix(line, "SUB-TICKET") {
+			return line
+		}
+	}
+	t.Fatalf("no SUB-TICKET header in:\n%s", out)
+	return ""
+}
+
+func TestWriteSummary_ViaAssigneeColumn(t *testing.T) {
+	fallback := analytics.ReturnEvent{ViaAssigneeFallback: true}
+	direct := analytics.ReturnEvent{}
+
+	t.Run("hidden when nothing fell back", func(t *testing.T) {
+		out := summary(t, analytics.Report{Issues: []analytics.IssueReport{
+			{Key: "KAN-3", ParentKey: "KAN-10", Returns: 2,
+				Events: []analytics.ReturnEvent{direct, direct}},
+		}})
+		if h := subTicketHeader(t, out); strings.Contains(h, "VIA ASSIGNEE") {
+			t.Errorf("column shown with no fallback attribution: %q", h)
+		}
+	})
+
+	t.Run("shown with the share per row", func(t *testing.T) {
+		out := summary(t, analytics.Report{Issues: []analytics.IssueReport{
+			// The real case: current developer set, so no "(assignee)"
+			// suffix, yet two of three returns came from the assignee.
+			{Key: "KAN-13", ParentKey: "KAN-10", Returns: 3,
+				Developer: analytics.User{DisplayName: "Dev X"},
+				Events:    []analytics.ReturnEvent{fallback, direct, fallback}},
+			{Key: "KAN-3", ParentKey: "KAN-10", Returns: 1,
+				Developer: analytics.User{DisplayName: "Dev X"},
+				Events:    []analytics.ReturnEvent{direct}},
+		}})
+
+		if h := subTicketHeader(t, out); !strings.Contains(h, "VIA ASSIGNEE") {
+			t.Fatalf("column missing: %q", h)
+		}
+		for _, line := range strings.Split(out, "\n") {
+			switch {
+			case strings.HasPrefix(line, "KAN-13"):
+				if !strings.Contains(line, "2/3") {
+					t.Errorf("KAN-13 row = %q, want 2/3", line)
+				}
+				if strings.Contains(line, "(assignee)") {
+					t.Errorf("KAN-13 row = %q: the current developer is set", line)
+				}
+			case strings.HasPrefix(line, "KAN-3"):
+				if !strings.HasSuffix(strings.TrimRight(line, " "), "-") {
+					t.Errorf("KAN-3 row = %q, want a placeholder", line)
+				}
+			}
+		}
+	})
+}

@@ -116,6 +116,23 @@ func Compute(issues []Issue, opts Options, warnings []Warning) Report {
 			if ev.ReworkSeconds != nil {
 				devRework[id] = append(devRework[id], *ev.ReworkSeconds)
 			}
+			// Provenance of this particular return, which is not what the
+			// cur-based warning above reports. That one says the Developer
+			// field is empty *now*; this says it was empty *then*, and names
+			// who the return therefore landed on.
+			//
+			// Only in ModeAtTransition. ModeCurrent resolves every event from
+			// the same current state as cur, so ev.ViaAssigneeFallback equals
+			// cur.viaAssignee there and this would be the cur warning repeated
+			// once per return.
+			if ev.ViaAssigneeFallback && opts.Mode == ModeAtTransition {
+				rep.Warnings = append(rep.Warnings, Warning{
+					IssueKey: iss.Key,
+					Code:     WarnAssigneeFallback,
+					Message: fmt.Sprintf("return at %s: Developer field %s was empty then, attributed to assignee %s",
+						ev.At.Format(time.RFC3339), opts.DeveloperFieldID, ev.AttributedTo.Label()),
+				})
+			}
 			if ev.Unattributed {
 				rep.Warnings = append(rep.Warnings, Warning{
 					IssueKey: iss.Key,

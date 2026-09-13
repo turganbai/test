@@ -83,7 +83,25 @@ func writeSummary(w io.Writer, rep analytics.Report) {
 		fmt.Fprintf(tw, "%s\t%d\t%d\t%.0f%%\t%s\n", s.Key, s.SubTicketCount, s.Returns, s.ReworkRate*100, worst)
 	}
 
-	fmt.Fprintln(tw, "\nSUB-TICKET\tSTORY\tRETURNS\tDEVELOPER (CURRENT)")
+	// Under at_transition the counted returns need not have been attributed
+	// the way the Developer field reads today, and the DEVELOPER (CURRENT)
+	// column deliberately shows today. Without this the terminal gave no hint
+	// that a number came from the assignee instead — the figures were right
+	// and their provenance invisible. Shown only when there is any, like the
+	// turnaround column above.
+	fallback := false
+	for _, i := range rep.Issues {
+		if viaAssigneeCount(i) > 0 {
+			fallback = true
+			break
+		}
+	}
+
+	header = "\nSUB-TICKET\tSTORY\tRETURNS\tDEVELOPER (CURRENT)"
+	if fallback {
+		header += "\tVIA ASSIGNEE"
+	}
+	fmt.Fprintln(tw, header)
 	for _, i := range rep.Issues {
 		if i.Returns == 0 {
 			continue
@@ -92,7 +110,11 @@ func writeSummary(w io.Writer, rep analytics.Report) {
 		if i.ViaAssigneeFallback {
 			dev += " (assignee)"
 		}
-		fmt.Fprintf(tw, "%s\t%s\t%d\t%s\n", i.Key, i.ParentKey, i.Returns, truncate(dev, 34))
+		fmt.Fprintf(tw, "%s\t%s\t%d\t%s", i.Key, i.ParentKey, i.Returns, truncate(dev, 34))
+		if fallback {
+			fmt.Fprintf(tw, "\t%s", viaAssigneeColumn(i))
+		}
+		fmt.Fprintln(tw)
 	}
 	tw.Flush()
 
@@ -117,6 +139,29 @@ func reworkColumn(secs *float64) string {
 	}
 	d := (time.Duration(*secs * float64(time.Second))).Round(time.Minute)
 	return d.String()
+}
+
+// viaAssigneeCount is how many of an issue's counted returns were attributed
+// through the assignee because the Developer field was empty at the time.
+func viaAssigneeCount(i analytics.IssueReport) int {
+	n := 0
+	for _, e := range i.Events {
+		if e.ViaAssigneeFallback {
+			n++
+		}
+	}
+	return n
+}
+
+// viaAssigneeColumn reads as a share of the RETURNS cell beside it: "2/3" is
+// two of that row's three returns. A row with none gets a placeholder rather
+// than "0/3", which invites being read as a measurement that came out zero.
+func viaAssigneeColumn(i analytics.IssueReport) string {
+	n := viaAssigneeCount(i)
+	if n == 0 {
+		return "-"
+	}
+	return fmt.Sprintf("%d/%d", n, i.Returns)
 }
 
 func truncate(s string, n int) string {
