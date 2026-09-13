@@ -82,9 +82,22 @@ func writeSummary(w io.Writer, rep analytics.Report) {
 	fmt.Fprintf(w, "generated %s\n", rep.GeneratedAt.Format(time.RFC3339))
 }
 
+// truncate shortens s to at most n *runes*, marking the cut with an ellipsis.
+//
+// Counting bytes here would slice a display name mid-rune — Cyrillic and the
+// ellipsis itself are multi-byte — printing U+FFFD and, because "…" costs three
+// bytes against the one it replaced, a result wider than the column it was
+// meant to fit.
 func truncate(s string, n int) string {
-	if len(s) <= n {
+	if n <= 0 {
+		return ""
+	}
+	r := []rune(s)
+	if len(r) <= n {
 		return s
 	}
-	return s[:n-1] + "…"
+	if n == 1 {
+		return "…"
+	}
+	return string(r[:n-1]) + "…"
 }
