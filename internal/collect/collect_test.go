@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -147,7 +148,7 @@ func TestCollectorAndCompute(t *testing.T) {
 // A deleted account keeps its accountId and loses its display name; the
 // mapping must survive that rather than dropping the user.
 func TestFlatten_DeletedUser(t *testing.T) {
-	changes, warns := flatten("SUB-2", []jira.Changelog{{
+	changes, warns := (&Collector{}).flatten("SUB-2", []jira.Changelog{{
 		ID:      "9102",
 		Author:  &jira.User{AccountID: "dev-gone", DisplayName: "", Active: false},
 		Created: "2026-08-01T12:00:00.000+0000",
@@ -171,7 +172,7 @@ func TestFlatten_DeletedUser(t *testing.T) {
 }
 
 func TestFlatten_UnparseableTimestampBecomesWarning(t *testing.T) {
-	changes, warns := flatten("SUB-9", []jira.Changelog{
+	changes, warns := (&Collector{}).flatten("SUB-9", []jira.Changelog{
 		{ID: "1", Created: "not a date", Items: []jira.ChangeDetails{{FieldID: "status"}}},
 		{ID: "2", Created: "2026-08-01T12:00:00.000+0000", Items: []jira.ChangeDetails{{FieldID: "status"}}},
 	})
@@ -201,4 +202,140 @@ func hasWarning(rep analytics.Report, code string) bool {
 		}
 	}
 	return false
+}
+
+// unmarshalIssue builds a jira.Issue from raw JSON, which is the only way to
+// populate IssueFields' unexported raw map — and the point of these tests is
+// precisely what the raw map holds.
+func unmarshalIssue(t *testing.T, body string) jira.Issue {
+	t.Helper()
+	var iss jira.Issue
+	if err := json.Unmarshal([]byte(body), &iss); err != nil {
+		t.Fatalf("unmarshal issue: %v", err)
+	}
+	return iss
+}
+
+// A multi-user Developer field used to fail to decode, so every issue on such a
+// site fell through to the assignee and the Developer field was never honoured.
+func TestMapIssue_MultiUserDeveloperField(t *testing.T) {
+	c := New(nil, "customfield_10043", slog.New(slog.NewTextHandler(io.Discard, nil)))
+
+	iss, warns := c.mapIssue(unmarshalIssue(t, `{
+		"id": "1", "key": "KAN-3",
+		"fields": {
+			"summary": "Подзадача 2.1",
+			"assignee": {"accountId": "qa-1", "displayName": "Турганбай С"},
+			"parent": {"key": "KAN-10"},
+			"customfield_10043": [{"accountId": "dev-a", "displayName": "azamat", "active": true}]
+		}
+	}`))
+
+	if iss.Developer.AccountID != "dev-a" {
+		t.Errorf("developer = %+v, want the user from the multi-user field", iss.Developer)
+	}
+	if !iss.DeveloperFieldPresent {
+		t.Error("DeveloperFieldPresent = false, want true")
+	}
+	if len(warns) != 0 {
+		t.Errorf("warnings = %+v, want none for a field naming exactly one developer", warns)
+	}
+}
+
+// Two developers on one ticket is genuinely ambiguous: the metric counts a
+// return against one person, so the choice is made and reported.
+func TestMapIssue_MultiUserDeveloperFieldIsAmbiguous(t *testing.T) {
+	c := New(nil, "customfield_10043", slog.New(slog.NewTextHandler(io.Discard, nil)))
+
+	iss, warns := c.mapIssue(unmarshalIssue(t, `{
+		"id": "2", "key": "KAN-7",
+		"fields": {
+			"parent": {"key": "KAN-10"},
+			"customfield_10043": [
+				{"accountId": "dev-a", "displayName": "azamat"},
+				{"accountId": "dev-b", "displayName": "Bob Dev"}
+			]
+		}
+	}`))
+
+	if iss.Developer.AccountID != "dev-a" {
+		t.Errorf("developer = %+v, want the first of the list", iss.Developer)
+	}
+	if len(warns) != 1 || warns[0].Code != analytics.WarnDeveloperFieldAmbiguous {
+		t.Fatalf("warnings = %+v, want one ambiguity warning", warns)
+	}
+	for _, want := range []string{"azamat", "Bob Dev", "KAN-7"} {
+		if !strings.Contains(warns[0].Message+warns[0].IssueKey, want) {
+			t.Errorf("warning does not mention %q: %+v", want, warns[0])
+		}
+	}
+}
+
+// Jira writes a multi-user field's changelog value as a bracketed list. Left
+// as-is it becomes a synthetic "[id]" account that matches nobody, so
+// at_transition attribution would split one developer into two.
+func TestFlatten_UnwrapsMultiUserChangelogValues(t *testing.T) {
+	c := New(nil, "customfield_10043", nil)
+
+	changes, warns := c.flatten("KAN-3", []jira.Changelog{{
+		ID:      "1",
+		Created: "2026-09-10T12:00:00.000+0000",
+		Items: []jira.ChangeDetails{
+			{
+				Field: "Developer", FieldID: "customfield_10043",
+				From: "[qa-1]", FromString: "[Турганбай С]",
+				To: "[dev-a]", ToString: "[azamat]",
+			},
+			// A status change on the same history must be left alone.
+			{
+				Field: "status", FieldID: "status",
+				From: "10001", FromString: "В работе",
+				To: "10008", ToString: "Returned",
+			},
+		},
+	}})
+	if len(warns) != 0 {
+		t.Fatalf("warnings = %+v, want none", warns)
+	}
+	if len(changes) != 2 {
+		t.Fatalf("changes = %d, want 2", len(changes))
+	}
+
+	dev := changes[0]
+	if dev.From != "qa-1" || dev.To != "dev-a" {
+		t.Errorf("ids = %q -> %q, want the brackets gone", dev.From, dev.To)
+	}
+	if dev.FromString != "Турганбай С" || dev.ToString != "azamat" {
+		t.Errorf("names = %q -> %q, want the brackets gone", dev.FromString, dev.ToString)
+	}
+
+	if st := changes[1]; st.To != "10008" || st.ToString != "Returned" {
+		t.Errorf("status change was rewritten: %+v", st)
+	}
+}
+
+func TestFirstOfUserList(t *testing.T) {
+	tests := []struct {
+		name             string
+		id, displayName  string
+		wantID, wantName string
+	}{
+		{"single user", "[dev-a]", "[azamat]", "dev-a", "azamat"},
+		{"several users", "[dev-a, dev-b]", "[azamat, Bob Dev]", "dev-a", "azamat"},
+		{"cleared field", "[]", "[]", "", ""},
+		// A single-user picker writes the bare value; nothing to unwrap.
+		{"not a list", "dev-a", "azamat", "dev-a", "azamat"},
+		// One developer whose name contains a comma must survive: the id list
+		// is what says how many people there are.
+		{"comma in a name", "[dev-a]", "[Doe, John]", "dev-a", "Doe, John"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			id, name := firstOfUserList(tt.id, tt.displayName)
+			if id != tt.wantID || name != tt.wantName {
+				t.Errorf("firstOfUserList(%q, %q) = %q, %q; want %q, %q",
+					tt.id, tt.displayName, id, name, tt.wantID, tt.wantName)
+			}
+		})
+	}
 }

@@ -118,9 +118,13 @@ type Warning struct {
 const (
 	WarnFetchFailed           = "fetch_failed"
 	WarnDeveloperFieldMissing = "developer_field_missing"
-	WarnAssigneeFallback      = "assignee_fallback"
-	WarnNoAttribution         = "no_attribution"
-	WarnChangelogTruncated    = "changelog_truncated"
+	// WarnDeveloperFieldAmbiguous is a multi-user Developer field naming more
+	// than one person: the return counts against one of them, and which one is
+	// not something the data can settle.
+	WarnDeveloperFieldAmbiguous = "developer_field_ambiguous"
+	WarnAssigneeFallback        = "assignee_fallback"
+	WarnNoAttribution           = "no_attribution"
+	WarnChangelogTruncated      = "changelog_truncated"
 )
 
 // IssueFetcher is declared here, on the consumer side: the domain states what

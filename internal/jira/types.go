@@ -61,18 +61,45 @@ func (f *IssueFields) Has(fieldID string) bool {
 	return ok
 }
 
-// UserField decodes a custom field holding a single user. It returns a nil user
-// for an absent or null field.
-func (f *IssueFields) UserField(fieldID string) (*User, error) {
+// UsersField decodes a custom field holding a user. Jira offers both a
+// single-user and a multi-user picker and the field id alone does not say which
+// one a site configured, so both shapes are accepted: a bare object, or an
+// array of them. A multi-user field that happens to hold one user therefore
+// reads back as a one-element slice rather than failing to decode.
+//
+// An absent, null or empty field yields no users and no error — that is the
+// ordinary "nobody set it" case, which the caller answers with the assignee
+// fallback.
+func (f *IssueFields) UsersField(fieldID string) ([]User, error) {
 	rawVal, ok := f.raw[fieldID]
 	if !ok || string(rawVal) == "null" {
 		return nil, nil
+	}
+	if isJSONArray(rawVal) {
+		var us []User
+		if err := json.Unmarshal(rawVal, &us); err != nil {
+			return nil, fmt.Errorf("decode field %s as a list of users: %w", fieldID, err)
+		}
+		return us, nil
 	}
 	var u User
 	if err := json.Unmarshal(rawVal, &u); err != nil {
 		return nil, fmt.Errorf("decode field %s as user: %w", fieldID, err)
 	}
-	return &u, nil
+	return []User{u}, nil
+}
+
+// isJSONArray reports whether raw is an array, ignoring leading whitespace.
+func isJSONArray(raw json.RawMessage) bool {
+	for _, b := range raw {
+		switch b {
+		case ' ', '\t', '\r', '\n':
+			continue
+		default:
+			return b == '['
+		}
+	}
+	return false
 }
 
 // Parent is the link a sub-ticket has to its story. We rely on this rather than
