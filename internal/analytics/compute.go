@@ -19,7 +19,15 @@ func Compute(issues []Issue, opts Options, warnings []Warning) Report {
 			ReturnedStatusIDs:   opts.ReturnedStatusIDs,
 			CodeReviewStatusIDs: opts.CodeReviewStatusIDs,
 		},
-		Warnings: append([]Warning(nil), warnings...),
+		// Every slice the report serialises is built non-nil: encoding/json
+		// writes nil as null, and a consumer iterating .warnings[] or
+		// .issues[].events[] should not have to special-case "nothing
+		// happened" against "the field is missing".
+		Warnings: append(make([]Warning, 0, len(warnings)), warnings...),
+		Issues:   make([]IssueReport, 0, len(issues)),
+	}
+	if rep.Params.ReturnedStatusIDs == nil {
+		rep.Params.ReturnedStatusIDs = []string{}
 	}
 	if !opts.From.IsZero() {
 		from := opts.From
@@ -170,6 +178,9 @@ func returnEvents(iss Issue, opts Options, returned, codeReview map[string]bool)
 		}
 		events = append(events, ev)
 	}
+	if events == nil {
+		return []ReturnEvent{}
+	}
 	return events
 }
 
@@ -235,7 +246,11 @@ func touch(m map[string]map[string]int, dev, issue string) {
 func developerReports(devIssues map[string]map[string]int, names map[string]string, rework map[string][]float64) []DeveloperReport {
 	out := make([]DeveloperReport, 0, len(devIssues))
 	for id, byIssue := range devIssues {
-		dr := DeveloperReport{AccountID: id, DisplayName: names[id]}
+		dr := DeveloperReport{
+			AccountID:   id,
+			DisplayName: names[id],
+			IssueKeys:   make([]string, 0, len(byIssue)),
+		}
 		for key, n := range byIssue {
 			dr.Issues++
 			dr.Returns += n
