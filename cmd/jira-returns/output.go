@@ -69,7 +69,7 @@ func writeSummary(w io.Writer, rep analytics.Report) {
 			truncate(d.DisplayName, 28), d.Issues, d.Returns, d.AvgReturnsPerIssue,
 			d.Distribution.Zero, d.Distribution.One, d.Distribution.Two, d.Distribution.ThreePlus)
 		if rework {
-			fmt.Fprintf(tw, "\t%s", reworkColumn(d.AvgReworkSeconds))
+			fmt.Fprintf(tw, "\t%s", reworkColumn(d))
 		}
 		fmt.Fprintln(tw)
 	}
@@ -127,12 +127,17 @@ func writeSummary(w io.Writer, rep analytics.Report) {
 // reworkColumn renders the average turnaround. The report stores seconds
 // because that is what a machine wants; a reader wants "5h0m", so the rounding
 // to whole minutes happens here rather than in the data.
-func reworkColumn(secs *float64) string {
-	if secs == nil {
+//
+// The sample count rides along in parentheses because it is not the developer's
+// return count: a return superseded by another before the work reached review
+// yields no sample. "5h0m0s (1)" is an anecdote and "5h0m0s (9)" is a trend,
+// and without the number they render identically.
+func reworkColumn(d analytics.DeveloperReport) string {
+	if d.AvgReworkSeconds == nil {
 		return "-"
 	}
-	d := (time.Duration(*secs * float64(time.Second))).Round(time.Minute)
-	return d.String()
+	avg := (time.Duration(*d.AvgReworkSeconds * float64(time.Second))).Round(time.Minute)
+	return fmt.Sprintf("%s (%d)", avg, d.ReworkSamples)
 }
 
 // viaAssigneeCount is how many of an issue's counted returns were attributed

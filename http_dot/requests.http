@@ -30,6 +30,7 @@ Accept: application/json
 @story = KAN-10
 @issue = KAN-3
 @devField = customfield_10043
+# go run ./cmd/jira-returns -jql 'project in (KAN) AND issuetype in subTaskIssueTypes() AND updated >= -26w ORDER BY created ASC' -from 2026-01-01 -to 2026-09-30
 
 ### 3. Поиск подзадач с историей
 POST {{jira_base_url}}/rest/api/3/search/jql
@@ -80,3 +81,11 @@ Content-Type: application/json
   "expand": "changelog",
   "maxResults": 100
 }
+
+###
+GET {{jira_base_url}}/rest/api/3/issue/{{issue}}/changelog?maxResults=100
+Authorization: Basic {{jira_email}} {{jira_api_token}}
+Accept: application/json
+Content-Type: application/json
+
+>> changelog.json

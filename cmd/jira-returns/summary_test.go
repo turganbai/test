@@ -69,8 +69,8 @@ func TestWriteSummary_ReworkColumnHiddenWhenUnmeasured(t *testing.T) {
 func TestWriteSummary_ReworkColumnShownWhenMeasured(t *testing.T) {
 	out := summary(t, analytics.Report{
 		Developers: []analytics.DeveloperReport{
-			{DisplayName: "azamat", Issues: 2, AvgReworkSeconds: ptr(18000)},
-			{DisplayName: "a1к0l", Issues: 1, AvgReworkSeconds: ptr(5400)},
+			{DisplayName: "azamat", Issues: 2, AvgReworkSeconds: ptr(18000), ReworkSamples: 4},
+			{DisplayName: "a1к0l", Issues: 1, AvgReworkSeconds: ptr(5400), ReworkSamples: 1},
 			// Never measured: still gets a placeholder cell.
 			{DisplayName: "Турганбай С", Issues: 1, AvgReworkSeconds: nil},
 		},
@@ -79,7 +79,7 @@ func TestWriteSummary_ReworkColumnShownWhenMeasured(t *testing.T) {
 	if h := developerHeader(t, out); !strings.Contains(h, "REWORK") {
 		t.Fatalf("REWORK column missing from header: %q", h)
 	}
-	for _, want := range []string{"5h0m0s", "1h30m0s"} {
+	for _, want := range []string{"5h0m0s (4)", "1h30m0s (1)"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("summary missing %q:\n%s", want, out)
 		}
@@ -92,21 +92,25 @@ func TestWriteSummary_ReworkColumnShownWhenMeasured(t *testing.T) {
 }
 
 func TestReworkColumn(t *testing.T) {
-	if got := reworkColumn(nil); got != "-" {
-		t.Errorf("reworkColumn(nil) = %q, want %q", got, "-")
+	if got := reworkColumn(analytics.DeveloperReport{}); got != "-" {
+		t.Errorf("reworkColumn with no average = %q, want %q", got, "-")
 	}
 	for _, tt := range []struct {
-		secs float64
-		want string
+		secs    float64
+		samples int
+		want    string
 	}{
-		{18000, "5h0m0s"},
-		{5400, "1h30m0s"},
-		{5430, "1h31m0s"}, // 90.5 minutes rounds away from zero
-		{29, "0s"},        // under half a minute
-		{0, "0s"},
+		{18000, 4, "5h0m0s (4)"},
+		{5400, 1, "1h30m0s (1)"},
+		{5430, 2, "1h31m0s (2)"}, // 90.5 minutes rounds away from zero
+		{29, 1, "0s (1)"},        // under half a minute
+		{0, 3, "0s (3)"},
 	} {
-		if got := reworkColumn(&tt.secs); got != tt.want {
-			t.Errorf("reworkColumn(%v) = %q, want %q", tt.secs, got, tt.want)
+		got := reworkColumn(analytics.DeveloperReport{
+			AvgReworkSeconds: &tt.secs, ReworkSamples: tt.samples,
+		})
+		if got != tt.want {
+			t.Errorf("reworkColumn(%v, %d) = %q, want %q", tt.secs, tt.samples, got, tt.want)
 		}
 	}
 }

@@ -86,6 +86,14 @@ Prefer ids over names in the long run: names are localized and get renamed, ids 
 
 ## Output
 
+The rework turnaround, when `JIRA_CODE_REVIEW_STATUS_IDS` is set, is the time from a return until
+the work was next handed to code review — measured only for rounds that ended that way. A return
+superseded by a further return before the work reached review yields no sample: that round never
+ended in a handback, so timing it would measure something that did not happen, and two returns
+sharing one review transition would otherwise average the same stretch of calendar in twice. The
+terminal prints the sample count beside the average (`83h12m0s (1)`) because a mean over one return
+is an anecdote and a mean over nine is a trend; `reworkSamples` carries it in the JSON.
+
 `report.json` contains `totals`, `developers` (with the 0/1/2/3+ distribution, because the average
 hides the tail), `stories`, `issues` (every return with its timestamp, the QA engineer who made it,
 and the developer it is attributed to) and `warnings`. Story and sub-ticket keys are included

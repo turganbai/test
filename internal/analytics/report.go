@@ -47,8 +47,10 @@ type ReturnEvent struct {
 	// Unattributed records that neither Developer nor assignee was set.
 	Unattributed bool `json:"unattributed"`
 
-	// ReworkSeconds is the time until the next transition into code-review,
-	// nil when unknown or when the metric is disabled.
+	// ReworkSeconds is the time until the work was next handed to code review,
+	// nil when the metric is disabled, when the work never reached review, or
+	// when this round of feedback was superseded by a further return before it
+	// did — see reworkAfter.
 	ReworkSeconds *float64 `json:"reworkSeconds,omitempty"`
 }
 
@@ -115,6 +117,12 @@ type DeveloperReport struct {
 	IssueKeys          []string     `json:"issueKeys"`
 	// AvgReworkSeconds is nil when no turnaround could be measured.
 	AvgReworkSeconds *float64 `json:"avgReworkSeconds,omitempty"`
+	// ReworkSamples is how many returns that average is built from, which is
+	// not Returns: a return that was superseded by another before the work
+	// reached review yields no sample at all. A mean over one return and a
+	// mean over five are otherwise indistinguishable, and the second is a
+	// trend where the first is an anecdote.
+	ReworkSamples int `json:"reworkSamples,omitempty"`
 }
 
 // Totals is the headline summary.

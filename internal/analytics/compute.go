@@ -163,9 +163,10 @@ func returnEvents(iss Issue, opts Options, returned, codeReview map[string]bool)
 	events := make([]ReturnEvent, 0)
 	// Collected once per issue rather than rescanned per return: an issue with
 	// 250 history entries and 20 returns cost 5000 iterations before.
-	var crTimes []time.Time
+	var crTimes, retTimes []time.Time
 	if len(codeReview) > 0 {
 		crTimes = codeReviewTimes(iss.Changelog, codeReview)
+		retTimes = statusTimes(iss.Changelog, returned)
 	}
 	for _, ch := range iss.Changelog {
 		if !isStatusChange(ch) {
@@ -204,7 +205,7 @@ func returnEvents(iss Issue, opts Options, returned, codeReview map[string]bool)
 		// reached code review has nothing to measure either way, and this
 		// skips the search entirely.
 		if len(crTimes) > 0 {
-			if d, ok := reworkAfter(crTimes, ch.At); ok {
+			if d, ok := reworkAfter(crTimes, ch.At, nextAfter(retTimes, ch.At)); ok {
 				secs := d.Seconds()
 				ev.ReworkSeconds = &secs
 			}
@@ -237,27 +238,55 @@ func ascendingByTime(changes []Change) []Change {
 // codeReviewTimes collects the instant of every transition into a code-review
 // status. The result is ascending because Issue.Changelog is.
 func codeReviewTimes(changes []Change, codeReview map[string]bool) []time.Time {
+	return statusTimes(changes, codeReview)
+}
+
+// statusTimes collects the instant of every transition into one of ids.
+// Ascending, because Issue.Changelog is.
+func statusTimes(changes []Change, ids map[string]bool) []time.Time {
 	var ts []time.Time
 	for _, ch := range changes {
-		if isStatusChange(ch) && codeReview[ch.To] {
+		if isStatusChange(ch) && ids[ch.To] && ch.From != ch.To {
 			ts = append(ts, ch.At)
 		}
 	}
 	return ts
 }
 
-// reworkAfter measures the time from a return until the next transition into
-// code-review, i.e. how long the developer took to hand the work back.
+// nextAfter returns the first instant in ts strictly after t, or the zero time
+// when there is none. ts must be ascending.
+func nextAfter(ts []time.Time, t time.Time) time.Time {
+	i := sort.Search(len(ts), func(i int) bool { return ts[i].After(t) })
+	if i == len(ts) {
+		return time.Time{}
+	}
+	return ts[i]
+}
+
+// reworkAfter measures the time from a return until the work was next handed
+// to code review — but only when that round of feedback actually ended in a
+// handback. until is the next return on the same issue, or the zero time when
+// there is none; a review transition at or after it belongs to a later round,
+// and this one yields no sample.
+//
+// Without that bound, two returns sharing one review transition each measured
+// against it and the same stretch of calendar was averaged in twice. Recording
+// the gap between them instead would be worse: the first round never ended in
+// a handback at all, so a small duration there measures a non-event and reads
+// as fast work.
 //
 // crTimes must be ascending, which it is because Issue.Changelog is.
 // sort.Search finds the first instant strictly after from, so a code-review
 // transition stamped at the same moment as the return does not count — the
 // same boundary the linear scan's At.After(from) drew.
-func reworkAfter(crTimes []time.Time, from time.Time) (time.Duration, bool) {
+func reworkAfter(crTimes []time.Time, from, until time.Time) (time.Duration, bool) {
 	i := sort.Search(len(crTimes), func(i int) bool {
 		return crTimes[i].After(from)
 	})
 	if i == len(crTimes) {
+		return 0, false
+	}
+	if !until.IsZero() && !crTimes[i].Before(until) {
 		return 0, false
 	}
 	return crTimes[i].Sub(from), true
@@ -364,6 +393,7 @@ func developerReports(devIssues map[string]map[string]int, names map[string]stri
 			}
 			avg := sum / float64(len(xs))
 			dr.AvgReworkSeconds = &avg
+			dr.ReworkSamples = len(xs)
 		}
 		sort.Strings(dr.IssueKeys)
 		out = append(out, dr)
