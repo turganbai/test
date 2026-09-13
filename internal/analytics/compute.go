@@ -331,10 +331,11 @@ func totals(rep Report) Totals {
 	return t
 }
 
-// storyIndex keeps stories in first-seen order until the final sort.
+// storyIndex collects stories by key. Insertion order is deliberately not
+// tracked: finish sorts by returns and then by key, a total order over unique
+// keys, so the output is fully determined without it.
 type storyIndex struct {
 	byKey map[string]*StoryReport
-	order []string
 }
 
 func newStoryIndex(seed []string) *storyIndex {
@@ -351,14 +352,12 @@ func (s *storyIndex) ensure(key string) *StoryReport {
 	}
 	st := &StoryReport{Key: key, SubTicketKeys: []string{}}
 	s.byKey[key] = st
-	s.order = append(s.order, key)
 	return st
 }
 
 func (s *storyIndex) finish() []StoryReport {
-	out := make([]StoryReport, 0, len(s.order))
-	for _, k := range s.order {
-		st := s.byKey[k]
+	out := make([]StoryReport, 0, len(s.byKey))
+	for _, st := range s.byKey {
 		if st.SubTicketCount > 0 {
 			st.ReworkRate = float64(st.SubTicketsWithReturn) / float64(st.SubTicketCount)
 		}
