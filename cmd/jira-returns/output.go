@@ -124,12 +124,6 @@ func writeSummary(w io.Writer, rep analytics.Report) {
 	fmt.Fprintf(w, "generated %s\n", rep.GeneratedAt.Format(time.RFC3339))
 }
 
-// truncate shortens s to at most n *runes*, marking the cut with an ellipsis.
-//
-// Counting bytes here would slice a display name mid-rune — Cyrillic and the
-// ellipsis itself are multi-byte — printing U+FFFD and, because "…" costs three
-// bytes against the one it replaced, a result wider than the column it was
-// meant to fit.
 // reworkColumn renders the average turnaround. The report stores seconds
 // because that is what a machine wants; a reader wants "5h0m", so the rounding
 // to whole minutes happens here rather than in the data.
@@ -164,6 +158,19 @@ func viaAssigneeColumn(i analytics.IssueReport) string {
 	return fmt.Sprintf("%d/%d", n, i.Returns)
 }
 
+// truncate shortens s to at most n *runes*, marking the cut with an ellipsis.
+//
+// Counting bytes here would slice a display name mid-rune — Cyrillic and the
+// ellipsis itself are multi-byte — printing U+FFFD and, because "…" costs
+// three bytes against the one it replaced, a result wider than the column it
+// was meant to fit. Names in this instance mix scripts, so the cut lands on a
+// multi-byte rune sooner than an all-ASCII reading of the code suggests.
+//
+// Runes, not display width: a CJK ideograph or an emoji occupies two terminal
+// cells and is counted here as one, so a column of such names renders wider
+// than its budget. Out of scope deliberately — correcting it means a
+// wcwidth-style table, and tabwriter measures the same way this does, so the
+// two at least agree.
 func truncate(s string, n int) string {
 	if n <= 0 {
 		return ""

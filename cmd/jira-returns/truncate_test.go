@@ -22,6 +22,10 @@ func TestTruncate(t *testing.T) {
 		{"cyrillic short enough is untouched", "Турганбаи С", 28, "Турганбаи С"},
 		{"exactly at the limit in runes, not bytes", "Турганбаи С", 11, "Турганбаи С"},
 		{"one rune over", "Турганбаи Се", 11, "Турганбаи …"},
+		// Mixed scripts in one name: the Cyrillic к is two bytes among
+		// one-byte neighbours, so a byte-indexed cut lands inside it.
+		{"mixed script is cut on a rune boundary", "a1к0l azamat", 5, "a1к0…"},
+		{"mixed script short enough is untouched", "a1к0l", 5, "a1к0l"},
 		{"n of 1", "азамат", 1, "…"},
 		{"n of 0", "азамат", 0, ""},
 		{"negative n", "азамат", -3, ""},
