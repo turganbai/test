@@ -47,11 +47,31 @@ func writeSummary(w io.Writer, rep analytics.Report) {
 		rep.Params.Mode, rep.Totals.SubTickets, rep.Totals.Returns, rep.Totals.ReworkRate*100)
 
 	tw := tabwriter.NewWriter(w, 0, 4, 2, ' ', 0)
-	fmt.Fprintln(tw, "\nDEVELOPER\tISSUES\tRETURNS\tAVG\t0\t1\t2\t3+")
+
+	// The turnaround metric is off unless JIRA_CODE_REVIEW_STATUS_IDS is set,
+	// and a column of dashes helps nobody — so it appears only once there is
+	// something to put in it.
+	rework := false
 	for _, d := range rep.Developers {
-		fmt.Fprintf(tw, "%s\t%d\t%d\t%.2f\t%d\t%d\t%d\t%d\n",
+		if d.AvgReworkSeconds != nil {
+			rework = true
+			break
+		}
+	}
+
+	header := "\nDEVELOPER\tISSUES\tRETURNS\tAVG\t0\t1\t2\t3+"
+	if rework {
+		header += "\tREWORK"
+	}
+	fmt.Fprintln(tw, header)
+	for _, d := range rep.Developers {
+		fmt.Fprintf(tw, "%s\t%d\t%d\t%.2f\t%d\t%d\t%d\t%d",
 			truncate(d.DisplayName, 28), d.Issues, d.Returns, d.AvgReturnsPerIssue,
 			d.Distribution.Zero, d.Distribution.One, d.Distribution.Two, d.Distribution.ThreePlus)
+		if rework {
+			fmt.Fprintf(tw, "\t%s", reworkColumn(d.AvgReworkSeconds))
+		}
+		fmt.Fprintln(tw)
 	}
 
 	fmt.Fprintln(tw, "\nSTORY\tSUB\tRETURNS\tREWORK\tWORST")
@@ -88,6 +108,17 @@ func writeSummary(w io.Writer, rep analytics.Report) {
 // ellipsis itself are multi-byte — printing U+FFFD and, because "…" costs three
 // bytes against the one it replaced, a result wider than the column it was
 // meant to fit.
+// reworkColumn renders the average turnaround. The report stores seconds
+// because that is what a machine wants; a reader wants "5h0m", so the rounding
+// to whole minutes happens here rather than in the data.
+func reworkColumn(secs *float64) string {
+	if secs == nil {
+		return "-"
+	}
+	d := (time.Duration(*secs * float64(time.Second))).Round(time.Minute)
+	return d.String()
+}
+
 func truncate(s string, n int) string {
 	if n <= 0 {
 		return ""
