@@ -64,6 +64,25 @@ type IssueReport struct {
 }
 
 // StoryReport aggregates the sub-tickets of one story.
+//
+// Parentage is always current, including under ModeAtTransition. A sub-ticket
+// that moved between stories has all of its returns counted under the story it
+// belongs to today, even ones that happened while it sat under another — so a
+// story's numbers describe its present membership, not the work done beneath
+// it historically.
+//
+// That is a simplification, and a deliberate one: the population is selected
+// by current parentage. The generated JQL is "parent in (...)", so a
+// sub-ticket that has since moved away is never fetched at all. Replaying the
+// parent inside Compute would attribute fetched rows historically while the
+// fetch itself stayed current, and the story totals would be built from an
+// inconsistent population — worse than the simplification it replaced.
+//
+// Two obstacles stand behind that argument, should it ever be revisited. The
+// IssueParentAssociation changelog row carries no fieldId, so it could only be
+// matched on its display name. And the value needed is the issue key, which
+// Jira puts in fromString/toString — the side this package never matches on,
+// because those are the localized, renameable strings.
 type StoryReport struct {
 	Key                  string   `json:"key"`
 	Summary              string   `json:"summary,omitempty"`

@@ -20,7 +20,9 @@ type attribution struct {
 // QA engineer instead of the developer.
 //
 // In ModeAtTransition both the Developer field and the assignee fallback are
-// replayed to t, so the two sources can never be mixed across time.
+// replayed to t, so the two sources can never be mixed across time. The
+// issue's parent is not replayed — see StoryReport for why the story rows stay
+// on current parentage.
 func resolve(iss Issue, developerFieldID string, mode AttributionMode, t time.Time) attribution {
 	dev := iss.Developer
 	assignee := iss.Assignee
