@@ -238,14 +238,37 @@ func reworkAfter(crTimes []time.Time, from time.Time) (time.Duration, bool) {
 	return crTimes[i].Sub(from), true
 }
 
-// isStatusChange matches the status field by id, falling back to the field name
-// only when the id is absent (older changelog entries omit fieldId).
-func isStatusChange(ch Change) bool {
-	if ch.FieldID != "" {
-		return ch.FieldID == StatusFieldID
-	}
-	return ch.Field == StatusFieldID
+// nameMatchableFields are the fields whose changelog display name equals their
+// id, so a row that predates fieldId can still be matched by name.
+//
+// It is an allowlist rather than a rule like "not a customfield_ prefix"
+// because the coincidence is a fact about these two specific system fields,
+// not a pattern worth inferring. A custom field breaks it outright: the
+// Developer field is customfield_10043 and shows up as "Developer", so a name
+// fallback there would compare "Developer" against "customfield_10043" and
+// match nothing, quietly, forever.
+var nameMatchableFields = map[string]bool{
+	StatusFieldID:   true,
+	assigneeFieldID: true,
 }
+
+// isFieldChange reports whether ch is a change to fieldID.
+//
+// One rule for the whole package. The id is authoritative; the name is
+// consulted only when the id is absent, and only for the fields above. Two
+// callers asking the same question used to answer it differently — the status
+// scan fell back to the name, the field replay did not — so rows without a
+// fieldId were counted in one place and skipped in the other.
+func isFieldChange(ch Change, fieldID string) bool {
+	if ch.FieldID != "" {
+		return ch.FieldID == fieldID
+	}
+	return nameMatchableFields[fieldID] && ch.Field == fieldID
+}
+
+// isStatusChange is isFieldChange for the status field, named for the many
+// places that ask only about it.
+func isStatusChange(ch Change) bool { return isFieldChange(ch, StatusFieldID) }
 
 func inPeriod(t, from, to time.Time) bool {
 	if !from.IsZero() && t.Before(from) {

@@ -66,14 +66,20 @@ func (u User) Label() string {
 // Change is one item of one changelog entry, flattened: Jira nests items inside
 // histories, but every item carries its history's author and timestamp anyway.
 type Change struct {
-	At         time.Time `json:"at"`
-	Author     User      `json:"author"`
-	Field      string    `json:"field"`   // localized name, display only
-	FieldID    string    `json:"fieldId"` // stable id, this is what we match on
-	From       string    `json:"from,omitempty"`
-	To         string    `json:"to,omitempty"`
-	FromString string    `json:"fromString,omitempty"`
-	ToString   string    `json:"toString,omitempty"`
+	At     time.Time `json:"at"`
+	Author User      `json:"author"`
+	// Field is the localized display name. It is a fallback identifier, not
+	// decoration: changelog rows written before Jira added fieldId carry only
+	// this. It is trusted for that purpose only for the fields where the name
+	// and the id are known to coincide — see isFieldChange.
+	Field string `json:"field"`
+	// FieldID is the stable id and the first choice for matching. Absent on
+	// old rows, which is why Field exists.
+	FieldID    string `json:"fieldId"`
+	From       string `json:"from,omitempty"`
+	To         string `json:"to,omitempty"`
+	FromString string `json:"fromString,omitempty"`
+	ToString   string `json:"toString,omitempty"`
 }
 
 // Issue is a sub-ticket (or a story) with its full changelog attached.

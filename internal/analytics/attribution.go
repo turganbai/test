@@ -57,7 +57,7 @@ func valueAt(changes []Change, fieldID string, current User, t time.Time) User {
 	val := current
 	for i := len(changes) - 1; i >= 0; i-- {
 		ch := changes[i]
-		if ch.FieldID != fieldID {
+		if !isFieldChange(ch, fieldID) {
 			continue
 		}
 		if !ch.At.After(t) {
