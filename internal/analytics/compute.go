@@ -159,6 +159,14 @@ func returnEvents(iss Issue, opts Options, returned, codeReview map[string]bool)
 		if !returned[ch.To] {
 			continue
 		}
+		// A self-transition is not a return. Jira records these — a workflow
+		// with a loop back to the same status, or a bulk edit — and the work
+		// never left the status, so nobody sent it back. Harmless while no
+		// self-transitionable status is configured as returned, which is not
+		// a property of this code and could change with one env var.
+		if ch.From == ch.To {
+			continue
+		}
 		if !inPeriod(ch.At, opts.From, opts.To) {
 			continue
 		}

@@ -138,3 +138,22 @@ func TestValueAt_ReplaysAssigneeRowsWithoutAFieldID(t *testing.T) {
 		t.Errorf("attributed to %q, want dev-a — the handover was after the return", got)
 	}
 }
+
+// Jira records 10004 -> 10004 on KAN-3: a workflow loop or a bulk edit. The
+// work never left the status, so it is not a return — and it must not become
+// one the day a self-transitionable status is added to the returned set.
+func TestReturnEvents_SelfTransitionIsNotAReturn(t *testing.T) {
+	iss := Issue{
+		Key: "KAN-3", ParentKey: "KAN-10",
+		Assignee: User{AccountID: "dev-a"},
+		Changelog: []Change{
+			{At: ts(t, "2026-09-01T09:00:00Z"), FieldID: StatusFieldID, From: statusReturn, To: statusReturn},
+			{At: ts(t, "2026-09-02T09:00:00Z"), FieldID: StatusFieldID, From: "10001", To: statusReturn},
+		},
+	}
+	rep := Compute([]Issue{iss}, Options{ReturnedStatusIDs: []string{statusReturn}}, nil)
+
+	if rep.Totals.Returns != 1 {
+		t.Errorf("returns = %d, want 1 — the self-transition was counted", rep.Totals.Returns)
+	}
+}
