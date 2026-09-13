@@ -6,7 +6,6 @@ package collect
 import (
 	"context"
 	"fmt"
-	"log/slog"
 	"sort"
 	"strings"
 
@@ -18,16 +17,12 @@ import (
 type Collector struct {
 	client           *jira.Client
 	developerFieldID string
-	log              *slog.Logger
 }
 
 // New builds a Collector. developerFieldID is the custom field id holding the
 // developer, e.g. "customfield_10050".
-func New(client *jira.Client, developerFieldID string, log *slog.Logger) *Collector {
-	if log == nil {
-		log = slog.Default()
-	}
-	return &Collector{client: client, developerFieldID: developerFieldID, log: log}
+func New(client *jira.Client, developerFieldID string) *Collector {
+	return &Collector{client: client, developerFieldID: developerFieldID}
 }
 
 var _ analytics.IssueFetcher = (*Collector)(nil)
@@ -36,7 +31,10 @@ var _ analytics.IssueFetcher = (*Collector)(nil)
 // Per-issue failures come back as warnings so that a partial report is still
 // produced.
 func (c *Collector) FetchIssues(ctx context.Context, jql string) ([]analytics.Issue, []analytics.Warning, error) {
-	fields := []string{"summary", "assignee", "status", "parent"}
+	// No "status": the metric reads transitions out of the changelog, and the
+	// current status appears nowhere in the report. A narrower field set also
+	// fits more issues into a search page.
+	fields := []string{"summary", "assignee", "parent"}
 	if c.developerFieldID != "" {
 		fields = append(fields, c.developerFieldID)
 	}
@@ -191,6 +189,10 @@ func flatten(issueKey, developerFieldID string, histories []jira.Changelog) ([]a
 	return out, warnings
 }
 
+// displayNames repeats the first two tiers of analytics.User.Label rather
+// than reusing it. Deliberate: jira.User is a wire DTO and should not grow
+// presentation methods, and converting a slice of them just to format one
+// warning string would cost more than these six lines.
 func displayNames(us []jira.User) []string {
 	out := make([]string, 0, len(us))
 	for _, u := range us {

@@ -37,7 +37,6 @@ type Issue struct {
 type IssueFields struct {
 	Summary  string  `json:"summary"`
 	Assignee *User   `json:"assignee"`
-	Status   *Status `json:"status"`
 	Parent   *Parent `json:"parent"`
 
 	raw map[string]json.RawMessage

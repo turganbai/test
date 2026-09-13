@@ -146,7 +146,7 @@ func run(args []string, stderr io.Writer) error {
 		jql = fmt.Sprintf("parent in (%s) ORDER BY created ASC", strings.Join(storyKeys, ", "))
 	}
 
-	report, err := analytics.Run(ctx, collect.New(client, cfg.DeveloperFieldID, logger), jql, analytics.Options{
+	report, err := analytics.Run(ctx, collect.New(client, cfg.DeveloperFieldID), jql, analytics.Options{
 		DeveloperFieldID:    cfg.DeveloperFieldID,
 		ReturnedStatusIDs:   returnedIDs,
 		CodeReviewStatusIDs: cfg.CodeReviewStatusIDs,

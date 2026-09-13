@@ -70,7 +70,7 @@ func TestCollectorAndCompute(t *testing.T) {
 		t.Fatalf("jira.New: %v", err)
 	}
 
-	rep, err := analytics.Run(context.Background(), New(client, devField, logger), "parent in (STORY-1, STORY-2)", analytics.Options{
+	rep, err := analytics.Run(context.Background(), New(client, devField), "parent in (STORY-1, STORY-2)", analytics.Options{
 		DeveloperFieldID:  devField,
 		ReturnedStatusIDs: []string{"10007"},
 		Mode:              analytics.ModeCurrent,
@@ -224,7 +224,7 @@ func unmarshalIssue(t *testing.T, body string) jira.Issue {
 // A multi-user Developer field used to fail to decode, so every issue on such a
 // site fell through to the assignee and the Developer field was never honoured.
 func TestMapIssue_MultiUserDeveloperField(t *testing.T) {
-	c := New(nil, "customfield_10043", slog.New(slog.NewTextHandler(io.Discard, nil)))
+	c := New(nil, "customfield_10043")
 
 	iss, warns := c.mapIssue(unmarshalIssue(t, `{
 		"id": "1", "key": "KAN-3",
@@ -250,7 +250,7 @@ func TestMapIssue_MultiUserDeveloperField(t *testing.T) {
 // Two developers on one ticket is genuinely ambiguous: the metric counts a
 // return against one person, so the choice is made and reported.
 func TestMapIssue_MultiUserDeveloperFieldIsAmbiguous(t *testing.T) {
-	c := New(nil, "customfield_10043", slog.New(slog.NewTextHandler(io.Discard, nil)))
+	c := New(nil, "customfield_10043")
 
 	iss, warns := c.mapIssue(unmarshalIssue(t, `{
 		"id": "2", "key": "KAN-7",
@@ -321,7 +321,7 @@ func TestFlatten_UnwrapsMultiUserChangelogValues(t *testing.T) {
 // the expand is not honoured, and a story registered only to anchor its
 // sub-tickets need never have one. Every read of it sits under one nil check.
 func TestMapIssue_NilChangelog(t *testing.T) {
-	c := New(nil, "customfield_10043", slog.New(slog.NewTextHandler(io.Discard, nil)))
+	c := New(nil, "customfield_10043")
 
 	iss, warns := c.mapIssue(unmarshalIssue(t, `{
 		"id": "1", "key": "KAN-3",
@@ -345,7 +345,7 @@ func TestMapIssue_NilChangelog(t *testing.T) {
 // failure from a field id that matches nothing: the field is right there, it
 // just does not decode. The two must not share a warning code.
 func TestMapIssue_DeveloperFieldWrongShape(t *testing.T) {
-	c := New(nil, "customfield_10043", slog.New(slog.NewTextHandler(io.Discard, nil)))
+	c := New(nil, "customfield_10043")
 
 	iss, warns := c.mapIssue(unmarshalIssue(t, `{
 		"id": "1", "key": "KAN-3",
