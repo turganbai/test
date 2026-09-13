@@ -337,3 +337,31 @@ func TestMapIssue_NilChangelog(t *testing.T) {
 		}
 	}
 }
+
+// A field id pointing at something that is not a user picker is a distinct
+// failure from a field id that matches nothing: the field is right there, it
+// just does not decode. The two must not share a warning code.
+func TestMapIssue_DeveloperFieldWrongShape(t *testing.T) {
+	c := New(nil, "customfield_10043", slog.New(slog.NewTextHandler(io.Discard, nil)))
+
+	iss, warns := c.mapIssue(unmarshalIssue(t, `{
+		"id": "1", "key": "KAN-3",
+		"fields": {"parent": {"key": "KAN-10"}, "customfield_10043": "just a string"}
+	}`))
+
+	if !iss.DeveloperFieldPresent {
+		t.Fatal("DeveloperFieldPresent = false; the field is present, only unreadable")
+	}
+	if len(warns) != 1 || warns[0].Code != analytics.WarnDeveloperFieldUnreadable {
+		t.Fatalf("warnings = %+v, want one %s", warns, analytics.WarnDeveloperFieldUnreadable)
+	}
+	// Compute's own check keys off DeveloperFieldPresent, so the absence code
+	// cannot also appear for this issue.
+	rep := analytics.Compute([]analytics.Issue{iss},
+		analytics.Options{DeveloperFieldID: "customfield_10043"}, warns)
+	for _, w := range rep.Warnings {
+		if w.Code == analytics.WarnDeveloperFieldMissing {
+			t.Errorf("a present-but-unreadable field was also reported missing: %+v", w)
+		}
+	}
+}

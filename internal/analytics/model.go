@@ -116,8 +116,22 @@ type Warning struct {
 
 // Warning codes.
 const (
-	WarnFetchFailed           = "fetch_failed"
+	WarnFetchFailed = "fetch_failed"
+	// WarnDeveloperFieldMissing is a Developer field the response did not
+	// carry at all: a wrong field id, or a field not on the issue's screen.
 	WarnDeveloperFieldMissing = "developer_field_missing"
+	// WarnDeveloperFieldUnreadable is a Developer field that is present and
+	// non-null but does not decode as a user — a field id pointing at a text,
+	// select or number field rather than a user picker.
+	//
+	// It is a separate code from WarnDeveloperFieldMissing because the two can
+	// never describe the same issue: the decode is only attempted once the
+	// field is found present and non-null, so this code implies the field
+	// exists, and WarnDeveloperFieldMissing implies it does not. Reporting
+	// both under one code said "missing" about a field that demonstrably
+	// exists, and left a misconfigured id and a wrong field type
+	// indistinguishable in the JSON.
+	WarnDeveloperFieldUnreadable = "developer_field_unreadable"
 	// WarnDeveloperFieldAmbiguous is a multi-user Developer field naming more
 	// than one person: the return counts against one of them, and which one is
 	// not something the data can settle.

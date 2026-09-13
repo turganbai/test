@@ -88,9 +88,12 @@ func (c *Collector) mapIssue(ri jira.Issue) (analytics.Issue, []analytics.Warnin
 		devs, err := ri.Fields.UsersField(c.developerFieldID)
 		switch {
 		case err != nil:
+			// Present but undecodable. UsersField returns no error for an
+			// absent or null field, so reaching here means the field exists
+			// and is the wrong shape — never that it is missing.
 			warnings = append(warnings, analytics.Warning{
 				IssueKey: ri.Key,
-				Code:     analytics.WarnDeveloperFieldMissing,
+				Code:     analytics.WarnDeveloperFieldUnreadable,
 				Message:  err.Error(),
 			})
 		case len(devs) > 0:
