@@ -99,3 +99,66 @@ func TestFilterDevelopers_Matching(t *testing.T) {
 		})
 	}
 }
+
+// Under at_transition one sub-ticket's returns can be split between developers
+// as the Developer field changes hands. The filtered report must not file the
+// other developer's returns under the selected one.
+func TestFilterDevelopers_NarrowsEventsToTheSelectedDeveloper(t *testing.T) {
+	ev := func(acc string) ReturnEvent {
+		return ReturnEvent{IssueKey: "KAN-3", AttributedTo: User{AccountID: acc}}
+	}
+	rep := Report{
+		Developers: []DeveloperReport{
+			{AccountID: "acc-1", DisplayName: "azamat", Issues: 1, Returns: 2, IssueKeys: []string{"KAN-3"}},
+			{AccountID: "acc-2", DisplayName: "Bob Dev", Issues: 2, Returns: 1, IssueKeys: []string{"KAN-3", "KAN-9"}},
+		},
+		Issues: []IssueReport{
+			{Key: "KAN-3", Returns: 3, Events: []ReturnEvent{ev("acc-1"), ev("acc-2"), ev("acc-1")}},
+			{Key: "KAN-9", Returns: 0, Events: []ReturnEvent{}},
+		},
+	}
+
+	rep.FilterDevelopers([]string{"azamat"})
+
+	if len(rep.Issues) != 1 || rep.Issues[0].Key != "KAN-3" {
+		t.Fatalf("issues = %+v, want only KAN-3", rep.Issues)
+	}
+	got := rep.Issues[0]
+	if got.Returns != 2 || len(got.Events) != 2 {
+		t.Errorf("KAN-3 = %d returns / %d events, want 2 and 2 — Bob's return leaked in", got.Returns, len(got.Events))
+	}
+	// The per-issue numbers have to agree with the developer row beside them.
+	if got.Returns != rep.Developers[0].Returns {
+		t.Errorf("issue returns = %d, developer returns = %d", got.Returns, rep.Developers[0].Returns)
+	}
+	for _, e := range got.Events {
+		if e.AttributedTo.AccountID != "acc-1" {
+			t.Errorf("event attributed to %q survived the filter", e.AttributedTo.AccountID)
+		}
+	}
+}
+
+// An issue kept only because a selected developer currently holds it, with
+// every return attributed elsewhere, reads as zero rather than vanishing.
+func TestFilterDevelopers_KeptIssueWithNoneOfTheirReturns(t *testing.T) {
+	rep := Report{
+		Developers: []DeveloperReport{
+			{AccountID: "acc-1", DisplayName: "azamat", Issues: 1, Returns: 0, IssueKeys: []string{"KAN-3"}},
+		},
+		Issues: []IssueReport{
+			{Key: "KAN-3", Returns: 1, Events: []ReturnEvent{{AttributedTo: User{AccountID: "acc-2"}}}},
+		},
+	}
+
+	rep.FilterDevelopers([]string{"acc-1"})
+
+	if len(rep.Issues) != 1 {
+		t.Fatalf("issues = %+v, want KAN-3 kept", rep.Issues)
+	}
+	if rep.Issues[0].Returns != 0 || len(rep.Issues[0].Events) != 0 {
+		t.Errorf("KAN-3 = %+v, want no returns of theirs", rep.Issues[0])
+	}
+	if rep.Issues[0].Events == nil {
+		t.Error("Events is nil; the report must not serialise null")
+	}
+}
