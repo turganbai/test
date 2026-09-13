@@ -145,6 +145,12 @@ func Compute(issues []Issue, opts Options, warnings []Warning) Report {
 // inside the reporting period, and attributes each one.
 func returnEvents(iss Issue, opts Options, returned, codeReview map[string]bool) []ReturnEvent {
 	var events []ReturnEvent
+	// Collected once per issue rather than rescanned per return: an issue with
+	// 250 history entries and 20 returns cost 5000 iterations before.
+	var crTimes []time.Time
+	if len(codeReview) > 0 {
+		crTimes = codeReviewTimes(iss.Changelog, codeReview)
+	}
 	for _, ch := range iss.Changelog {
 		if !isStatusChange(ch) {
 			continue
@@ -170,8 +176,11 @@ func returnEvents(iss Issue, opts Options, returned, codeReview map[string]bool)
 			ViaAssigneeFallback: at.viaAssignee,
 			Unattributed:        at.unattributed,
 		}
-		if len(codeReview) > 0 {
-			if d, ok := reworkAfter(iss.Changelog, ch.At, codeReview); ok {
+		// len(crTimes) rather than len(codeReview): an issue that never
+		// reached code review has nothing to measure either way, and this
+		// skips the search entirely.
+		if len(crTimes) > 0 {
+			if d, ok := reworkAfter(crTimes, ch.At); ok {
 				secs := d.Seconds()
 				ev.ReworkSeconds = &secs
 			}
@@ -184,18 +193,41 @@ func returnEvents(iss Issue, opts Options, returned, codeReview map[string]bool)
 	return events
 }
 
-// reworkAfter measures the time from a return until the next transition into
-// code-review, i.e. how long the developer took to hand the work back.
-func reworkAfter(changes []Change, from time.Time, codeReview map[string]bool) (time.Duration, bool) {
+// codeReviewTimes collects, in ascending order, the instant of every
+// transition into a code-review status.
+//
+// Sorting here is what makes the metric independent of changelog order.
+// reworkAfter used to take the first match it walked past, which is the
+// earliest one only if the input happens to be ordered — and nothing in the
+// Issue type promises that, least of all a changelog stitched together from
+// separately fetched pages. When the order broke, the rework time silently
+// grew: no panic, no warning, just a larger number.
+func codeReviewTimes(changes []Change, codeReview map[string]bool) []time.Time {
+	var ts []time.Time
 	for _, ch := range changes {
-		if !isStatusChange(ch) || !ch.At.After(from) {
-			continue
-		}
-		if codeReview[ch.To] {
-			return ch.At.Sub(from), true
+		if isStatusChange(ch) && codeReview[ch.To] {
+			ts = append(ts, ch.At)
 		}
 	}
-	return 0, false
+	sort.Slice(ts, func(i, j int) bool { return ts[i].Before(ts[j]) })
+	return ts
+}
+
+// reworkAfter measures the time from a return until the next transition into
+// code-review, i.e. how long the developer took to hand the work back.
+//
+// crTimes must be ascending, as codeReviewTimes returns it. sort.Search finds
+// the first instant strictly after from, so a code-review transition stamped at
+// the same moment as the return does not count — the same boundary the linear
+// scan's At.After(from) drew.
+func reworkAfter(crTimes []time.Time, from time.Time) (time.Duration, bool) {
+	i := sort.Search(len(crTimes), func(i int) bool {
+		return crTimes[i].After(from)
+	})
+	if i == len(crTimes) {
+		return 0, false
+	}
+	return crTimes[i].Sub(from), true
 }
 
 // isStatusChange matches the status field by id, falling back to the field name
