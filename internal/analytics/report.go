@@ -118,6 +118,8 @@ type Params struct {
 	From                *time.Time      `json:"from,omitempty"`
 	To                  *time.Time      `json:"to,omitempty"`
 	JQL                 string          `json:"jql,omitempty"`
+	// Developers echoes a -developer filter. Empty means the whole team.
+	Developers []string `json:"developers,omitempty"`
 }
 
 // Report is the whole output document.

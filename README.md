@@ -12,8 +12,20 @@ fallback.
 ```bash
 go build ./cmd/jira-returns
 ./jira-returns -stories PROJ-101,PROJ-102 -from 2026-08-01 -to 2026-08-31
-./jira-returns -jql 'project = PROJ AND parent is not EMPTY AND updated >= -30d' -out -
+./jira-returns -jql 'project = PROJ AND issuetype in subTaskIssueTypes() AND updated >= -30d' -out -
+./jira-returns -jql 'project = PROJ AND issuetype in subTaskIssueTypes()' -developer azamat
 ```
+
+Select sub-tickets with `issuetype in subTaskIssueTypes()` rather than `parent is not EMPTY`: a
+story's parent is its *epic*, so the looser filter pulls the stories in as well and invents a story
+row for every epic. The function expands to whatever sub-task types the site defines, so it also
+survives localized issue type names.
+
+`-developer` narrows the report to one or more people, by display name (case-insensitive substring)
+or account id. The filter runs *after* aggregation, so `totals` and the story rows still describe the
+whole team — one developer's four returns mean something only against what everyone else did — and
+under `at_transition` it still finds the tickets they have since handed over, which a JQL filter on
+the Developer field would miss.
 
 `-out` writes the JSON report (default `report.json`, `-` for stdout); a short table always goes to
 stdout, or to stderr when the JSON is on stdout.

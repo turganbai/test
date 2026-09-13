@@ -36,6 +36,7 @@ type flags struct {
 	to       string
 	out      string
 	env      string
+	dev      string
 	deadline time.Duration
 	statuses bool
 }
@@ -64,6 +65,7 @@ func run(args []string, stderr io.Writer) error {
 	fs.StringVar(&f.to, "to", "", "end of the period, exclusive (2006-01-02 or RFC3339)")
 	fs.StringVar(&f.out, "out", "report.json", `JSON output path, or "-" for stdout`)
 	fs.StringVar(&f.env, "env", "", `env file layered under the environment (default ".env" in the working directory, when present)`)
+	fs.StringVar(&f.dev, "developer", "", "comma-separated developers to report on, by display name or account id (default: everyone)")
 	fs.DurationVar(&f.deadline, "deadline", 10*time.Minute, "overall deadline for the whole run")
 	fs.BoolVar(&f.statuses, "statuses", false, "print this site's status ids and names, then exit")
 	fs.Usage = func() { usage(fs) }
@@ -156,6 +158,14 @@ func run(args []string, stderr io.Writer) error {
 	})
 	if err != nil {
 		return err
+	}
+
+	// Filtering happens after aggregation, not in the JQL: the totals a
+	// developer's numbers are read against have to come from the whole team,
+	// and under at_transition a JQL filter would miss the tickets they have
+	// since handed over.
+	if unmatched := report.FilterDevelopers(splitKeys(f.dev)); len(unmatched) > 0 {
+		logger.Warn("no developer matched", "selectors", unmatched)
 	}
 
 	return emit(report, f.out)
