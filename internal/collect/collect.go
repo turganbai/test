@@ -149,9 +149,13 @@ func (c *Collector) flatten(issueKey string, histories []jira.Changelog) ([]anal
 		for _, it := range h.Items {
 			from, fromString := it.From, it.FromString
 			to, toString := it.To, it.ToString
+			// Normalize the multi-user picker's bracketed value at the
+			// boundary, through the same parser the domain replays it with.
 			if c.developerFieldID != "" && it.FieldID == c.developerFieldID {
-				from, fromString = firstOfUserList(from, fromString)
-				to, toString = firstOfUserList(to, toString)
+				f := analytics.ParseUserValue(from, fromString)
+				t := analytics.ParseUserValue(to, toString)
+				from, fromString = f.AccountID, f.DisplayName
+				to, toString = t.AccountID, t.DisplayName
 			}
 			out = append(out, analytics.Change{
 				At:         at.UTC(),
@@ -169,46 +173,6 @@ func (c *Collector) flatten(issueKey string, histories []jira.Changelog) ([]anal
 	// returns it that way already, but nothing in the contract promises it.
 	sort.SliceStable(out, func(i, j int) bool { return out[i].At.Before(out[j].At) })
 	return out, warnings
-}
-
-// firstOfUserList normalizes what Jira writes into the changelog for a
-// multi-user picker: a bracketed list, `[accountid]` for one person and
-// `[id1, id2]` for several, with the names bracketed the same way. A
-// single-user picker writes the bare value and is returned untouched.
-//
-// The first entry wins, matching how UsersField reduces the field's current
-// value, so a replay in at_transition mode names the same person the field
-// does — rather than a synthetic "[id1, id2]" account that belongs to nobody.
-//
-// The id list is authoritative because an account id never contains a comma;
-// the name is split only once the ids prove there is more than one user, so a
-// lone developer called "Doe, John" survives intact. Beyond that the name is
-// best-effort: every comparison downstream is on the id.
-func firstOfUserList(id, name string) (string, string) {
-	inner, ok := unbracket(id)
-	if !ok {
-		return id, name
-	}
-	ids := strings.Split(inner, ",")
-	first := strings.TrimSpace(ids[0])
-
-	if n, ok := unbracket(name); ok {
-		name = n
-	}
-	if len(ids) > 1 {
-		if i := strings.IndexByte(name, ','); i >= 0 {
-			name = name[:i]
-		}
-	}
-	return first, strings.TrimSpace(name)
-}
-
-// unbracket strips one layer of [...] and says whether it was there.
-func unbracket(s string) (string, bool) {
-	if len(s) >= 2 && s[0] == '[' && s[len(s)-1] == ']' {
-		return s[1 : len(s)-1], true
-	}
-	return s, false
 }
 
 func displayNames(us []jira.User) []string {

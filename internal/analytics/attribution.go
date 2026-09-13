@@ -62,13 +62,14 @@ func valueAt(changes []Change, fieldID string, current User, t time.Time) User {
 		if !ch.At.After(t) {
 			break
 		}
-		// Undo this change. For user fields Jira puts the accountId in
-		// from/to and the display name in fromString/toString; a cleared
-		// field yields an empty "from", which correctly collapses to a zero
-		// User and triggers the assignee fallback for that point in time.
-		// Active is left unset: the changelog does not say whether the
-		// account was active back then.
-		val = User{AccountID: ch.From, DisplayName: ch.FromString}
+		// Undo this change by taking its "from" side. The bare accountId in
+		// from/to is the single-user picker's shape only — a multi-user field
+		// wraps its value in brackets, so the raw strings are never used
+		// directly; ParseUserValue is what both this replay and the DTO
+		// mapping read them through. A cleared field yields an empty "from",
+		// which correctly collapses to a zero User and triggers the assignee
+		// fallback for that point in time.
+		val = ParseUserValue(ch.From, ch.FromString)
 	}
 	return val
 }

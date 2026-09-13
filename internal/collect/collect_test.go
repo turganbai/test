@@ -313,29 +313,3 @@ func TestFlatten_UnwrapsMultiUserChangelogValues(t *testing.T) {
 		t.Errorf("status change was rewritten: %+v", st)
 	}
 }
-
-func TestFirstOfUserList(t *testing.T) {
-	tests := []struct {
-		name             string
-		id, displayName  string
-		wantID, wantName string
-	}{
-		{"single user", "[dev-a]", "[azamat]", "dev-a", "azamat"},
-		{"several users", "[dev-a, dev-b]", "[azamat, Bob Dev]", "dev-a", "azamat"},
-		{"cleared field", "[]", "[]", "", ""},
-		// A single-user picker writes the bare value; nothing to unwrap.
-		{"not a list", "dev-a", "azamat", "dev-a", "azamat"},
-		// One developer whose name contains a comma must survive: the id list
-		// is what says how many people there are.
-		{"comma in a name", "[dev-a]", "[Doe, John]", "dev-a", "Doe, John"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			id, name := firstOfUserList(tt.id, tt.displayName)
-			if id != tt.wantID || name != tt.wantName {
-				t.Errorf("firstOfUserList(%q, %q) = %q, %q; want %q, %q",
-					tt.id, tt.displayName, id, name, tt.wantID, tt.wantName)
-			}
-		})
-	}
-}
