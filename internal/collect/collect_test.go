@@ -148,7 +148,7 @@ func TestCollectorAndCompute(t *testing.T) {
 // A deleted account keeps its accountId and loses its display name; the
 // mapping must survive that rather than dropping the user.
 func TestFlatten_DeletedUser(t *testing.T) {
-	changes, warns := (&Collector{}).flatten("SUB-2", []jira.Changelog{{
+	changes, warns := flatten("SUB-2", "", []jira.Changelog{{
 		ID:      "9102",
 		Author:  &jira.User{AccountID: "dev-gone", DisplayName: "", Active: false},
 		Created: "2026-08-01T12:00:00.000+0000",
@@ -172,7 +172,7 @@ func TestFlatten_DeletedUser(t *testing.T) {
 }
 
 func TestFlatten_UnparseableTimestampBecomesWarning(t *testing.T) {
-	changes, warns := (&Collector{}).flatten("SUB-9", []jira.Changelog{
+	changes, warns := flatten("SUB-9", "", []jira.Changelog{
 		{ID: "1", Created: "not a date", Items: []jira.ChangeDetails{{FieldID: "status"}}},
 		{ID: "2", Created: "2026-08-01T12:00:00.000+0000", Items: []jira.ChangeDetails{{FieldID: "status"}}},
 	})
@@ -180,7 +180,12 @@ func TestFlatten_UnparseableTimestampBecomesWarning(t *testing.T) {
 		t.Errorf("changes = %d, want the parseable entry to survive", len(changes))
 	}
 	if len(warns) != 1 || warns[0].IssueKey != "SUB-9" {
-		t.Errorf("warnings = %+v, want one for SUB-9", warns)
+		t.Fatalf("warnings = %+v, want one for SUB-9", warns)
+	}
+	// The transport was fine; a value in it was not. Reporting this as
+	// fetch_failed sent a reader looking at the network for a bad timestamp.
+	if warns[0].Code != analytics.WarnChangelogUnparseable {
+		t.Errorf("code = %q, want %q", warns[0].Code, analytics.WarnChangelogUnparseable)
 	}
 }
 
@@ -275,9 +280,7 @@ func TestMapIssue_MultiUserDeveloperFieldIsAmbiguous(t *testing.T) {
 // as-is it becomes a synthetic "[id]" account that matches nobody, so
 // at_transition attribution would split one developer into two.
 func TestFlatten_UnwrapsMultiUserChangelogValues(t *testing.T) {
-	c := New(nil, "customfield_10043", nil)
-
-	changes, warns := c.flatten("KAN-3", []jira.Changelog{{
+	changes, warns := flatten("KAN-3", "customfield_10043", []jira.Changelog{{
 		ID:      "1",
 		Created: "2026-09-10T12:00:00.000+0000",
 		Items: []jira.ChangeDetails{

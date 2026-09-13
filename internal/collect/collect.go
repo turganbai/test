@@ -125,7 +125,7 @@ func (c *Collector) mapIssue(ri jira.Issue) (analytics.Issue, []analytics.Warnin
 					len(ri.Changelog.Histories), ri.Changelog.Total),
 			})
 		}
-		changes, warns := c.flatten(ri.Key, ri.Changelog.Histories)
+		changes, warns := flatten(ri.Key, c.developerFieldID, ri.Changelog.Histories)
 		iss.Changelog = changes
 		warnings = append(warnings, warns...)
 	}
@@ -134,7 +134,11 @@ func (c *Collector) mapIssue(ri jira.Issue) (analytics.Issue, []analytics.Warnin
 
 // flatten turns Jira's history/items nesting into a flat, time-ordered list of
 // changes, each carrying its history's author and timestamp.
-func (c *Collector) flatten(issueKey string, histories []jira.Changelog) ([]analytics.Change, []analytics.Warning) {
+//
+// developerFieldID is passed rather than read off a receiver: it is the only
+// thing here that varies, and a parameter says so where a method on Collector
+// implied a dependency on the client and the logger that this never had.
+func flatten(issueKey, developerFieldID string, histories []jira.Changelog) ([]analytics.Change, []analytics.Warning) {
 	var (
 		out      []analytics.Change
 		warnings []analytics.Warning
@@ -142,9 +146,12 @@ func (c *Collector) flatten(issueKey string, histories []jira.Changelog) ([]anal
 	for _, h := range histories {
 		at, err := h.CreatedAt()
 		if err != nil {
+			// The fetch succeeded; one entry's timestamp did not parse. The
+			// entry is dropped — a change we cannot place in time is worse
+			// than no change — and the rest of the issue is still counted.
 			warnings = append(warnings, analytics.Warning{
 				IssueKey: issueKey,
-				Code:     analytics.WarnFetchFailed,
+				Code:     analytics.WarnChangelogUnparseable,
 				Message:  fmt.Sprintf("changelog entry %s: %v", h.ID, err),
 			})
 			continue
@@ -158,7 +165,7 @@ func (c *Collector) flatten(issueKey string, histories []jira.Changelog) ([]anal
 			to, toString := it.To, it.ToString
 			// Normalize the multi-user picker's bracketed value at the
 			// boundary, through the same parser the domain replays it with.
-			if c.developerFieldID != "" && it.FieldID == c.developerFieldID {
+			if developerFieldID != "" && it.FieldID == developerFieldID {
 				f := analytics.ParseUserValue(from, fromString)
 				t := analytics.ParseUserValue(to, toString)
 				from, fromString = f.AccountID, f.DisplayName

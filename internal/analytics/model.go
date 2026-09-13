@@ -139,6 +139,13 @@ const (
 	WarnAssigneeFallback        = "assignee_fallback"
 	WarnNoAttribution           = "no_attribution"
 	WarnChangelogTruncated      = "changelog_truncated"
+	// WarnChangelogUnparseable is one history entry whose timestamp did not
+	// parse. The entry is skipped and the rest of the issue is kept, so it
+	// reads like WarnChangelogTruncated — counts may be low — but the cause is
+	// a malformed value in a response that arrived intact, not a response we
+	// could not finish fetching. Distinct from WarnFetchFailed for the same
+	// reason: nothing failed at the transport.
+	WarnChangelogUnparseable = "changelog_unparseable"
 )
 
 // IssueFetcher is declared here, on the consumer side: the domain states what
