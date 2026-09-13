@@ -16,18 +16,16 @@ func Compute(issues []Issue, opts Options, warnings []Warning) Report {
 		Params: Params{
 			Mode:                opts.Mode,
 			DeveloperFieldID:    opts.DeveloperFieldID,
-			ReturnedStatusIDs:   opts.ReturnedStatusIDs,
+			ReturnedStatusIDs:   append([]string{}, opts.ReturnedStatusIDs...),
 			CodeReviewStatusIDs: opts.CodeReviewStatusIDs,
 		},
-		// Every slice the report serialises is built non-nil: encoding/json
-		// writes nil as null, and a consumer iterating .warnings[] or
-		// .issues[].events[] should not have to special-case "nothing
-		// happened" against "the field is missing".
+		// Every slice the report serialises is built non-nil *where it is
+		// constructed*, never patched up afterwards: encoding/json writes nil
+		// as null, and a consumer iterating .warnings[] or .issues[].events[]
+		// should not have to special-case "nothing happened" against "the
+		// field is missing".
 		Warnings: append(make([]Warning, 0, len(warnings)), warnings...),
 		Issues:   make([]IssueReport, 0, len(issues)),
-	}
-	if rep.Params.ReturnedStatusIDs == nil {
-		rep.Params.ReturnedStatusIDs = []string{}
 	}
 	if !opts.From.IsZero() {
 		from := opts.From
@@ -144,7 +142,7 @@ func Compute(issues []Issue, opts Options, warnings []Warning) Report {
 // returnEvents extracts every transition into a "returned" status that falls
 // inside the reporting period, and attributes each one.
 func returnEvents(iss Issue, opts Options, returned, codeReview map[string]bool) []ReturnEvent {
-	var events []ReturnEvent
+	events := make([]ReturnEvent, 0)
 	// Collected once per issue rather than rescanned per return: an issue with
 	// 250 history entries and 20 returns cost 5000 iterations before.
 	var crTimes []time.Time
@@ -186,9 +184,6 @@ func returnEvents(iss Issue, opts Options, returned, codeReview map[string]bool)
 			}
 		}
 		events = append(events, ev)
-	}
-	if events == nil {
-		return []ReturnEvent{}
 	}
 	return events
 }
@@ -354,7 +349,7 @@ func (s *storyIndex) ensure(key string) *StoryReport {
 	if st, ok := s.byKey[key]; ok {
 		return st
 	}
-	st := &StoryReport{Key: key}
+	st := &StoryReport{Key: key, SubTicketKeys: []string{}}
 	s.byKey[key] = st
 	s.order = append(s.order, key)
 	return st
@@ -368,9 +363,6 @@ func (s *storyIndex) finish() []StoryReport {
 			st.ReworkRate = float64(st.SubTicketsWithReturn) / float64(st.SubTicketCount)
 		}
 		sort.Strings(st.SubTicketKeys)
-		if st.SubTicketKeys == nil {
-			st.SubTicketKeys = []string{}
-		}
 		out = append(out, *st)
 	}
 	sort.Slice(out, func(i, j int) bool {

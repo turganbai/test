@@ -67,6 +67,26 @@ func TestReportMarshalsNoNulls_EmptyReport(t *testing.T) {
 	}
 }
 
+// A story seeded by -stories that turned out to have no sub-tickets at all
+// still reaches the report, and its subTicketKeys must be [] rather than null.
+// That story never passes through the sub-ticket branch, so it is the case the
+// construction-time initialiser in ensure exists for.
+func TestReportMarshalsNoNulls_StoryWithNoSubTickets(t *testing.T) {
+	rep := Compute(nil, Options{StoryKeys: []string{"KAN-10", "KAN-99"}}, nil)
+
+	if len(rep.Stories) != 2 {
+		t.Fatalf("stories = %d, want both seeded keys", len(rep.Stories))
+	}
+	for _, st := range rep.Stories {
+		if st.SubTicketKeys == nil {
+			t.Errorf("story %s: SubTicketKeys is nil", st.Key)
+		}
+	}
+	if nulls := marshalNulls(t, rep); len(nulls) > 0 {
+		t.Errorf("null at: %s", strings.Join(nulls, ", "))
+	}
+}
+
 // And the populated case, so the guards are not hiding a regression.
 func TestReportMarshalsNoNulls_WithReturnsAndWarnings(t *testing.T) {
 	iss := Issue{
