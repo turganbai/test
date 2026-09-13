@@ -25,7 +25,9 @@ survives localized issue type names.
 or account id. The filter runs *after* aggregation, so `totals` and the story rows still describe the
 whole team — one developer's four returns mean something only against what everyone else did — and
 under `at_transition` it still finds the tickets they have since handed over, which a JQL filter on
-the Developer field would miss.
+the Developer field would miss. The sub-ticket rows are narrowed to their own returns, so the numbers
+there agree with their developer row. A selector that matches nobody is an error rather than an empty
+report, since an empty one reads as "they had no returns".
 
 `-out` writes the JSON report (default `report.json`, `-` for stdout); a short table always goes to
 stdout, or to stderr when the JSON is on stdout.

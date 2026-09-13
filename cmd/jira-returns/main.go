@@ -164,8 +164,19 @@ func run(args []string, stderr io.Writer) error {
 	// developer's numbers are read against have to come from the whole team,
 	// and under at_transition a JQL filter would miss the tickets they have
 	// since handed over.
-	if unmatched := report.FilterDevelopers(splitKeys(f.dev)); len(unmatched) > 0 {
-		logger.Warn("no developer matched", "selectors", unmatched)
+	if selectors := splitKeys(f.dev); len(selectors) > 0 {
+		unmatched := report.FilterDevelopers(selectors)
+		switch {
+		case len(report.Developers) == 0:
+			// An empty developers table reads as "they had no returns", which
+			// is exactly the wrong conclusion to draw from a typo, so a filter
+			// that kept nobody fails instead of writing the report.
+			return fmt.Errorf("no developer matched %s", strings.Join(unmatched, ", "))
+		case len(unmatched) > 0:
+			// Deliberately not through the logger: LOG_LEVEL=error would
+			// swallow it and the rows the typo removed would never be missed.
+			fmt.Fprintf(stderr, "warning: no developer matched %s\n", strings.Join(unmatched, ", "))
+		}
 	}
 
 	return emit(report, f.out)
