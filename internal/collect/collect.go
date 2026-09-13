@@ -109,15 +109,19 @@ func (c *Collector) mapIssue(ri jira.Issue) (analytics.Issue, []analytics.Warnin
 		}
 	}
 
-	if ri.Changelog.Truncated() {
-		warnings = append(warnings, analytics.Warning{
-			IssueKey: ri.Key,
-			Code:     analytics.WarnChangelogTruncated,
-			Message: fmt.Sprintf("changelog truncated: %d of %d histories available, counts may be low",
-				len(ri.Changelog.Histories), ri.Changelog.Total),
-		})
-	}
+	// Everything that reads the changelog sits under one nil check. Truncated
+	// guards its own receiver, so the old order could not actually panic —
+	// but it put the invariant in the callee, where this call site cannot
+	// show it, and left the len() in the warning below looking unguarded.
 	if ri.Changelog != nil {
+		if ri.Changelog.Truncated() {
+			warnings = append(warnings, analytics.Warning{
+				IssueKey: ri.Key,
+				Code:     analytics.WarnChangelogTruncated,
+				Message: fmt.Sprintf("changelog truncated: %d of %d histories available, counts may be low",
+					len(ri.Changelog.Histories), ri.Changelog.Total),
+			})
+		}
 		changes, warns := c.flatten(ri.Key, ri.Changelog.Histories)
 		iss.Changelog = changes
 		warnings = append(warnings, warns...)

@@ -313,3 +313,27 @@ func TestFlatten_UnwrapsMultiUserChangelogValues(t *testing.T) {
 		t.Errorf("status change was rewritten: %+v", st)
 	}
 }
+
+// An issue can come back with no changelog at all — the search omits it when
+// the expand is not honoured, and a story registered only to anchor its
+// sub-tickets need never have one. Every read of it sits under one nil check.
+func TestMapIssue_NilChangelog(t *testing.T) {
+	c := New(nil, "customfield_10043", slog.New(slog.NewTextHandler(io.Discard, nil)))
+
+	iss, warns := c.mapIssue(unmarshalIssue(t, `{
+		"id": "1", "key": "KAN-3",
+		"fields": {"summary": "Подзадача", "parent": {"key": "KAN-10"}}
+	}`))
+
+	if iss.Key != "KAN-3" || iss.ParentKey != "KAN-10" {
+		t.Errorf("issue = %+v, want the fields mapped", iss)
+	}
+	if len(iss.Changelog) != 0 {
+		t.Errorf("changelog = %+v, want none", iss.Changelog)
+	}
+	for _, w := range warns {
+		if w.Code == analytics.WarnChangelogTruncated {
+			t.Errorf("absent changelog reported as truncated: %+v", w)
+		}
+	}
+}
