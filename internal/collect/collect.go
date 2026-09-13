@@ -204,9 +204,11 @@ func displayNames(us []jira.User) []string {
 }
 
 func toUser(u *jira.User) analytics.User {
+	// jira.User.Active is deliberately dropped: analytics.User has no such
+	// field, because half the users in a report are replayed from changelog
+	// rows that cannot know it.
 	return analytics.User{
 		AccountID:   u.AccountID,
 		DisplayName: u.DisplayName,
-		Active:      u.Active,
 	}
 }

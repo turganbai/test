@@ -26,9 +26,6 @@ import "strings"
 // the name is split only once the ids prove there is more than one user, so a
 // lone developer called "Doe, John" survives intact. Beyond that the name is
 // best-effort: every comparison downstream is on the id.
-//
-// Active is left unset. A changelog records who a field pointed at, never
-// whether that account was enabled at the time.
 func ParseUserValue(id, name string) User {
 	inner, ok := unbracket(id)
 	if !ok {

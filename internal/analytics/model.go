@@ -41,11 +41,14 @@ const StatusFieldID = "status"
 const UnattributedAccountID = "(unattributed)"
 
 // User is a Jira account as far as this tool cares. DisplayName is empty for
-// deleted or anonymized accounts, so never key on it.
+// deleted or anonymized accounts, so never key on it — and that emptiness is
+// this package's signal for a gone account. There is deliberately no Active
+// field: a changelog records who a field pointed at, never whether that
+// account was enabled at the time, so a replayed user could only ever have
+// guessed at one.
 type User struct {
 	AccountID   string `json:"accountId,omitempty"`
 	DisplayName string `json:"displayName,omitempty"`
-	Active      bool   `json:"active"`
 }
 
 // IsZero reports whether the user carries no identity at all.

@@ -15,10 +15,10 @@ const (
 )
 
 var (
-	qa    = User{AccountID: "qa-1", DisplayName: "Qa Engineer", Active: true}
-	devA  = User{AccountID: "dev-a", DisplayName: "Alice Dev", Active: true}
-	devB  = User{AccountID: "dev-b", DisplayName: "Bob Dev", Active: true}
-	ghost = User{AccountID: "dev-gone", DisplayName: "", Active: false} // deleted account
+	qa    = User{AccountID: "qa-1", DisplayName: "Qa Engineer"}
+	devA  = User{AccountID: "dev-a", DisplayName: "Alice Dev"}
+	devB  = User{AccountID: "dev-b", DisplayName: "Bob Dev"}
+	ghost = User{AccountID: "dev-gone", DisplayName: ""} // deleted account
 )
 
 func ts(t *testing.T, s string) time.Time {
