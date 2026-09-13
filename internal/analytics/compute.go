@@ -299,14 +299,14 @@ func developerReports(devIssues map[string]map[string]int, names map[string]stri
 			}
 		}
 		if dr.Issues > 0 {
-			dr.AvgReturnsPerIssue = round2(float64(dr.Returns) / float64(dr.Issues))
+			dr.AvgReturnsPerIssue = float64(dr.Returns) / float64(dr.Issues)
 		}
 		if xs := rework[id]; len(xs) > 0 {
 			var sum float64
 			for _, x := range xs {
 				sum += x
 			}
-			avg := round2(sum / float64(len(xs)))
+			avg := sum / float64(len(xs))
 			dr.AvgReworkSeconds = &avg
 		}
 		sort.Strings(dr.IssueKeys)
@@ -331,13 +331,9 @@ func totals(rep Report) Totals {
 		}
 	}
 	if t.SubTickets > 0 {
-		t.ReworkRate = round2(float64(t.SubTicketsWithReturn) / float64(t.SubTickets))
+		t.ReworkRate = float64(t.SubTicketsWithReturn) / float64(t.SubTickets)
 	}
 	return t
-}
-
-func round2(f float64) float64 {
-	return float64(int64(f*100+0.5)) / 100
 }
 
 // storyIndex keeps stories in first-seen order until the final sort.
@@ -369,7 +365,7 @@ func (s *storyIndex) finish() []StoryReport {
 	for _, k := range s.order {
 		st := s.byKey[k]
 		if st.SubTicketCount > 0 {
-			st.ReworkRate = round2(float64(st.SubTicketsWithReturn) / float64(st.SubTicketCount))
+			st.ReworkRate = float64(st.SubTicketsWithReturn) / float64(st.SubTicketCount)
 		}
 		sort.Strings(st.SubTicketKeys)
 		if st.SubTicketKeys == nil {
